@@ -1505,8 +1505,7 @@ with tab4:
         st.subheader("⚙️ Configuration")
         market = st.selectbox("Select Market", list(MARKETS.keys()), key="scanner_market")
         
-        show_80_only = st.checkbox("⭐ Show only 80% Setups", key="scanner_checkbox
-_80")
+        show_80_only = st.checkbox("⭐ Show only 80% Setups", key="scanner_checkbox_80")
         
         scan_button = st.button("🚀 QUANTUM SCAN", type="primary", use_container_width=True, key="btn_quantum_scan")
     
