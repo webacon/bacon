@@ -1475,8 +1475,7 @@ with tab1:
     with col1:
         st.subheader("🔍 Last Scan Info")
         if st.session_state.last_scan_time:
-            st.write(f"
-⏰ Last scan: {st.session_state.last_scan_time}")
+            st.write(f"⏰ Last scan: {st.session_state.last_scan_time}")
             st.write(f"📊 Symbols: {st.session_state.last_scan_count}")
             st.write(f"✅ Signals: {st.session_state.last_scan_signals}")
         else:
@@ -1494,8 +1493,6 @@ with tab1:
             st.success("✅ IB Connected")
         else:
             st.info("📴 IB Disabled")
-    
-    st.markdown("---")
     
     # Auto-Scan Results
     if st.session_state.auto_scan_enabled and len(st.session_state.auto_scan_results) > 0:
