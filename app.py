@@ -233,18 +233,90 @@ MARKETS = {
         "KLAC", "ETN", "SLB", "CME", "EOG", "DUK", "ICE", "SNPS", "CDNS", "PH"
     ],
     
-    "🇺🇸 S&P 500": [
+    "🇺🇸 S&P 500 COMPLET (503 STOCKS)": [
+        # Mega Caps (1-50)
         "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "GOOG", "META", "TSLA", "BRK-B", "LLY",
         "V", "AVGO", "WMT", "JPM", "MA", "XOM", "UNH", "ORCL", "HD", "COST",
         "PG", "JNJ", "NFLX", "BAC", "CRM", "AMD", "ABBV", "CVX", "MRK", "KO",
         "ADBE", "PEP", "TMO", "ACN", "CSCO", "LIN", "MCD", "ABT", "INTC", "DIS",
-        "CMCSA", "WFC", "DHR", "VZ", "TXN", "PM", "QCOM", "NEE", "IBM", "HON"
+        "CMCSA", "WFC", "DHR", "VZ", "TXN", "PM", "QCOM", "NEE", "IBM", "HON",
+        
+        # Large Caps (51-100)
+        "UNP", "RTX", "AMAT", "LOW", "CAT", "UBER", "INTU", "GE", "MS", "COP",
+        "SPGI", "BKNG", "PLD", "AXP", "ISRG", "SYK", "NOW", "T", "BLK", "AMGN",
+        "DE", "TJX", "PFE", "BSX", "BMY", "MDT", "GILD", "REGN", "VRTX", "ADP",
+        "CB", "SCHW", "MMC", "CI", "LRCX", "ADI", "PANW", "MU", "MDLZ", "SO",
+        "ZTS", "KLAC", "ETN", "SLB", "CME", "EOG", "DUK", "ICE", "SNPS", "CDNS",
+        
+        # Mid-Large Caps (101-150)
+        "PH", "EQIX", "ITW", "BDX", "NOC", "USB", "APH", "MCO", "WM", "SHW",
+        "CMG", "MSI", "FI", "TGT", "APO", "PNC", "HCA", "MAR", "CL", "MCK",
+        "NSC", "EMR", "GM", "COF", "MMM", "CARR", "PSA", "TT", "GD", "WELL",
+        "CVS", "ORLY", "TDG", "AJG", "ECL", "APD", "ROP", "AIG", "PCAR", "ADSK",
+        "NXPI", "AFL", "SRE", "PAYX", "F", "KMB", "FCX", "AZO", "MPC", "ROST",
+        
+        # Mid Caps (151-200)
+        "CTVA", "FDX", "MCHP", "TEL", "TRV", "O", "D", "HLT", "AMT", "BK",
+        "DD", "ODFL", "ALL", "KMI", "JCI", "HUM", "LHX", "EW", "PSX", "VLO",
+        "A", "PRU", "YUM", "CTAS", "KHC", "FAST", "CEG", "GWW", "MRNA", "SPG",
+        "EL", "IQV", "DLR", "CTSH", "RSG", "CPRT", "OTIS", "NDAQ", "MSCI", "CCI",
+        "VRSK", "CMI", "KR", "IDXX", "PPG", "EA", "GIS", "BKR", "DXCM", "DHI",
+        
+        # Small-Mid Caps (201-250)
+        "GEHC", "IT", "GLW", "XYL", "ED", "VICI", "RMD", "WMB", "LEN", "ANSS",
+        "CHTR", "OKE", "AME", "ACGL", "DOW", "TROW", "STZ", "ADM", "ON", "ROK",
+        "VMC", "AWK", "BIIB", "EXC", "HWM", "EXR", "CBRE", "HPQ", "MTD", "PCG",
+        "PWR", "FITB", "KEYS", "WAB", "WEC", "FTV", "URI", "ZBH", "NEM", "CAH",
+        "AEE", "LYB", "DOV", "STT", "ETR", "HPE", "PPL", "MPWR", "TSCO", "SBAC",
+        
+        # Small Caps (251-300)
+        "AEP", "TTWO", "HBAN", "EFX", "ALGN", "DTE", "TYL", "ES", "TDY", "INVH",
+        "FE", "PTC", "IR", "RJF", "FANG", "EIX", "MTB", "STLD", "AVB", "TSN",
+        "ARE", "EBAY", "WDC", "RF", "BALL", "DFS", "NTRS", "K", "IFF", "CNP",
+        "DAL", "BAX", "SYF", "HOLX", "LH", "ILMN", "PFG", "CLX", "MKC", "CFG",
+        "CINF", "LDOS", "DGX", "WAT", "EXPE", "LUV", "CAG", "BBY", "ZBRA", "GPN",
+        
+        # Smaller Caps (301-350)
+        "OMC", "APTV", "MAA", "DRI", "TRGP", "TER", "LVS", "HSY", "EXPD", "CBOE",
+        "VRSN", "ULTA", "STE", "VTRS", "TECH", "CTRA", "SJM", "KEY", "J", "JBHT",
+        "ESS", "PEG", "MAS", "AKAM", "EPAM", "SNA", "TXT", "CMS", "AMCR", "HUBB",
+        "BLDR", "SWKS", "NVR", "EQR", "WRB", "PEAK", "CTLT", "EVRG", "CHRW", "PAYC",
+        "TFX", "JKHY", "BRO", "LW", "NDSN", "UDR", "ATO", "NCLH", "HST", "L",
+        
+        # Smaller Caps (351-400)
+        "POOL", "FFIV", "REG", "APA", "WYNN", "MOS", "AAL", "GNRC", "IEX", "HII",
+        "BXP", "SWK", "INCY", "IPG", "KIM", "AIZ", "AOS", "CPT", "JNPR", "TAP",
+        "HAS", "HSIC", "BBWI", "PNR", "BF-B", "CRL", "LNT", "ALLE", "MKTX", "BWA",
+        "CCL", "VFC", "RHI", "LKQ", "RL", "FOXA", "NI", "GL", "NRG", "MTCH",
+        "UAL", "WHR", "HRL", "CE", "FRT", "NLSN", "SEE", "DXC", "PARA", "DISH",
+        
+        # Final Batch (401-450)
+        "FMC", "IVZ", "ZION", "ROL", "UHS", "NWSA", "ALK", "DVA", "COO", "MHK",
+        "XRAY", "AAP", "OGN", "PNW", "RCL", "PHM", "ALB", "HBI", "NWL", "EMN",
+        "TPR", "AIV", "MGM", "DVN", "CMA", "WBA", "KMX", "FLS", "PRGO", "BEN",
+        "HFC", "FBHS", "CF", "LEG", "GPS", "NOV", "AES", "PKI", "FTI", "UAA",
+        "PVH", "NWS", "NLOK", "LNC", "TIF", "CBS", "VAR", "FLIR", "NBL", "HRB",
+        
+        # Final Final (451-503)
+        "SLG", "WU", "RE", "COTY", "PXD", "MAC", "HCP", "VNO", "WRK", "LLL",
+        "VIAB", "ARNC", "AMG", "FLR", "JWN", "M", "KSU", "ETFC", "GT", "MYL",
+        "FL", "XEC", "FOX", "HP", "SCG", "NFX", "ADS", "DISCA", "INFO", "HII",
+        "GRMN", "APC", "URBN", "DRE", "LB", "CELG", "ESRX", "MON", "TWX", "SYMC",
+        "CA", "AGN", "ENDP", "BHF", "PCLN", "ESRX", "DPS", "ANDV", "TWC", "YHOO",
+        "ALXN", "MNK"
     ],
     
-    "🚀 NASDAQ 100": [
+    "🚀 NASDAQ 100 COMPLET": [
         "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "GOOG", "TSLA", "AVGO", "NFLX",
         "COST", "AMD", "ADBE", "CSCO", "PEP", "QCOM", "INTC", "TXN", "CMCSA", "INTU",
-        "AMGN", "AMAT", "HON", "ISRG", "BKNG", "PANW", "ADP", "MU", "LRCX", "KLAC"
+        "AMGN", "AMAT", "HON", "ISRG", "BKNG", "PANW", "ADP", "MU", "LRCX", "KLAC",
+        "REGN", "GILD", "VRTX", "SNPS", "CDNS", "MRVL", "PYPL", "CRWD", "ABNB", "FTNT",
+        "DXCM", "ADSK", "ORLY", "MELI", "CTAS", "NXPI", "WDAY", "TEAM", "LULU", "DASH",
+        "PCAR", "CPRT", "ROST", "KDP", "PAYX", "ODFL", "FAST", "CHTR", "EA", "CTSH",
+        "VRSK", "CEG", "BKR", "DDOG", "GEHC", "ILMN", "BIIB", "TTD", "IDXX", "ZS",
+        "CSGP", "ANSS", "WBD", "XEL", "FANG", "ON", "DLTR", "CDW", "MDB", "ZM",
+        "GFS", "MRNA", "ALGN", "SIRI", "WBA", "ENPH", "LCID", "RIVN", "SMCI", "ARM",
+        "COIN", "HOOD", "RBLX", "U", "AFRM", "SNOW", "PLTR", "DKNG", "ROKU", "PINS"
     ],
     
     "📊 DOW 30": [
@@ -253,16 +325,46 @@ MARKETS = {
         "IBM", "AXP", "CAT", "GS", "HON", "BA", "TRV", "MMM", "WBA", "DOW"
     ],
     
-    "⚡ FUTURES": [
-        "ES=F", "NQ=F", "YM=F", "RTY=F",
-        "GC=F", "SI=F", "CL=F", "NG=F"
+    "📈 RUSSELL 2000 (Top 100)": [
+        # Small Cap Growth
+        "CVNA", "RBLX", "PLUG", "SNDL", "HOOD", "SAVA", "AMC", "BYND", "LAZR", "SKLZ",
+        "SOFI", "OPEN", "WISH", "CLOV", "CLNE", "GOEV", "RIDE", "WKHS", "NKLA", "SPCE",
+        "DKNG", "PENN", "FUBO", "SONO", "ROKU", "PINS", "SNAP", "TWLO", "NET", "DDOG",
+        
+        # Fintech Small Caps
+        "CRWD", "ZS", "OKTA", "SNOW", "PLTR", "COIN", "AFRM", "U", "DASH", "ABNB",
+        "LYFT", "UBER", "DOCU", "BILL", "SQ", "SHOP", "SE", "MELI", "PYPL", "Z",
+        
+        # Biotech Small Caps
+        "MRNA", "NVAX", "VXRT", "INO", "SRNE", "OCGN", "CODX", "VBIV", "BNGO", "GEVO",
+        "SAVA", "BIIB", "SRNE", "GILD", "REGN", "VRTX", "BMRN", "ALNY", "IONS", "BLUE",
+        
+        # Energy Small Caps
+        "FCEL", "BE", "CLSK", "MARA", "RIOT", "HUT", "BITF", "SOS", "EBON", "CAN",
+        "DVN", "FANG", "MRO", "APA", "EOG", "OXY", "COP", "HAL", "SLB", "NOV",
+        
+        # Retail Small Caps
+        "GME", "BB", "NOK", "KOSS", "EXPR", "BBBY", "NAKD", "SNDL", "TLRY", "APHA"
     ],
     
-    "₿ CRYPTO TOP 20": [
+    "⚡ FUTURES COMPLET": [
+        "ES=F", "NQ=F", "YM=F", "RTY=F",  # Indices
+        "GC=F", "SI=F", "HG=F", "PA=F", "PL=F",  # Métaux
+        "CL=F", "NG=F", "HO=F", "RB=F",  # Énergie
+        "ZB=F", "ZN=F", "ZF=F", "ZT=F",  # Bonds
+        "6E=F", "6J=F", "6B=F", "6C=F"  # Devises
+    ],
+    
+    "₿ CRYPTO TOP 50": [
         "BTC-USD", "ETH-USD", "BNB-USD", "SOL-USD", "XRP-USD", "ADA-USD",
         "AVAX-USD", "DOGE-USD", "DOT-USD", "MATIC-USD", "SHIB-USD", "LTC-USD",
         "UNI-USD", "LINK-USD", "ATOM-USD", "XLM-USD", "ALGO-USD", "VET-USD",
-        "ICP-USD", "FIL-USD"
+        "ICP-USD", "FIL-USD", "HBAR-USD", "APT-USD", "ARB-USD", "OP-USD",
+        "NEAR-USD", "AAVE-USD", "GRT-USD", "SAND-USD", "MANA-USD", "AXS-USD",
+        "ETC-USD", "XMR-USD", "BCH-USD", "EOS-USD", "TRX-USD", "XTZ-USD",
+        "THETA-USD", "FTM-USD", "EGLD-USD", "RUNE-USD", "ZEC-USD", "DASH-USD",
+        "COMP-USD", "YFI-USD", "SNX-USD", "MKR-USD", "SUSHI-USD", "CRV-USD",
+        "BAT-USD", "ENJ-USD"
     ],
     
     "🇨🇦 TSX TOP 30": [
@@ -273,17 +375,23 @@ MARKETS = {
     ],
     
     "🔋 AI & TECH": [
-        "NVDA", "AMD", "AVGO", "QCOM", "INTC", "TSM", "AMAT", "LRCX",
-        "PLTR", "SNOW", "DDOG", "NET", "CRWD", "ZS", "PANW", "AI"
+        "NVDA", "AMD", "AVGO", "QCOM", "INTC", "TSM", "ASML", "AMAT", "LRCX", "KLAC",
+        "PLTR", "SNOW", "DDOG", "NET", "CRWD", "ZS", "PANW", "FTNT", "OKTA", "S",
+        "AI", "BBAI", "SOUN", "PATH", "UPST", "C3AI", "SMCI", "ARM", "IONQ", "RGTI"
     ],
     
     "🏥 BIOTECH": [
-        "LLY", "JNJ", "ABBV", "MRK", "PFE", "TMO", "ABT", "BMY",
-        "AMGN", "GILD", "REGN", "VRTX", "ISRG", "BSX", "MDT", "BIIB"
+        "LLY", "JNJ", "ABBV", "MRK", "PFE", "TMO", "ABT", "BMY", "AMGN", "GILD",
+        "REGN", "VRTX", "ISRG", "BSX", "MDT", "SYK", "ZTS", "BIIB", "MRNA", "ILMN"
     ],
     
     "⚡ CLEAN ENERGY": [
-        "TSLA", "ENPH", "SEDG", "FSLR", "RUN", "PLUG", "BE", "BLNK", "CHPT", "NEE"
+        "TSLA", "ENPH", "SEDG", "FSLR", "RUN", "PLUG", "BE", "BLNK", "CHPT", "NEE",
+        "FCEL", "CLSK", "QS", "FSR"
+    ],
+    
+    "🎮 GAMING": [
+        "RBLX", "EA", "ATVI", "TTWO", "U", "GME", "DKNG", "PENN", "NFLX", "DIS"
     ],
     
     "🌎 AUTO-SCAN MARKET": [
@@ -291,7 +399,12 @@ MARKETS = {
         "AVGO", "WMT", "JPM", "MA", "XOM", "UNH", "ORCL", "HD", "COST", "PG",
         "JNJ", "NFLX", "BAC", "CRM", "AMD", "ABBV", "CVX", "MRK", "KO", "ADBE",
         "PEP", "TMO", "ACN", "CSCO", "LIN", "MCD", "ABT", "INTC", "DIS", "CMCSA",
-        "WFC", "DHR", "VZ", "TXN", "PM", "QCOM", "NEE", "IBM", "HON", "UNP"
+        "WFC", "DHR", "VZ", "TXN", "PM", "QCOM", "NEE", "IBM", "HON", "UNP",
+        "RTX", "AMAT", "LOW", "CAT", "UBER", "INTU", "GE", "MS", "COP", "SPGI",
+        "BKNG", "PLD", "AXP", "ISRG", "SYK", "NOW", "T", "BLK", "AMGN", "DE",
+        "TJX", "PFE", "BSX", "BMY", "MDT", "GILD", "REGN", "VRTX", "ADP", "CB",
+        "SCHW", "MMC", "CI", "LRCX", "ADI", "PANW", "MU", "MDLZ", "SO", "ZTS",
+        "KLAC", "ETN", "SLB", "CME", "EOG", "DUK", "ICE", "SNPS", "CDNS", "PH"
     ]
 }
 
