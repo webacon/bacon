@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import time
 import json
 import requests
+import threading
 
 # ==================== CONFIG ====================
 st.set_page_config(
@@ -18,8 +19,8 @@ st.set_page_config(
 )
 
 # ==================== TELEGRAM CONFIG ====================
-TELEGRAM_TOKEN = "8414444384:AAFlblBgToY7ew50ufZTmNd5qJGRid-TtVA"
-CHAT_ID = "813100618"
+TELEGRAM_TOKEN = st.secrets.get("TELEGRAM_TOKEN", "8414444384:AAFlblBgToY7ew50ufZTmNd5qJGRid-TtVA")
+CHAT_ID = st.secrets.get("CHAT_ID", "813100618")
 
 def send_telegram_alert(message):
     """Envoie une alerte Telegram"""
@@ -48,6 +49,119 @@ if 'telegram_enabled' not in st.session_state:
 if 'last_telegram_sent' not in st.session_state:
     st.session_state.last_telegram_sent = {}
 
+if 'active_signals' not in st.session_state:
+    st.session_state.active_signals = []
+
+if 'closed_signals' not in st.session_state:
+    st.session_state.closed_signals = []
+
+if 'auto_scan_enabled' not in st.session_state:
+    st.session_state.auto_scan_enabled = False
+
+if 'last_auto_scan' not in st.session_state:
+    st.session_state.last_auto_scan = None
+
+if 'auto_scan_results' not in st.session_state:
+    st.session_state.auto_scan_results = []
+
+# ==================== SIGNAL TRACKER FUNCTIONS ====================
+def add_signal_to_tracker(symbol, entry, stop, tp1, tp2, tp3, quantum_score, ai_score, tier, flow, rsi):
+    """Ajoute un signal au tracker"""
+    signal = {
+        'symbol': symbol,
+        'entry_price': entry,
+        'entry_date': datetime.now().strftime('%Y-%m-%d %H:%M'),
+        'stop': stop,
+        'tp1': tp1,
+        'tp2': tp2,
+        'tp3': tp3,
+        'quantum_score': quantum_score,
+        'ai_score': ai_score,
+        'tier': tier,
+        'flow': flow,
+        'rsi': rsi,
+        'status': 'ACTIVE',
+        'exit_price': None,
+        'exit_reason': None,
+        'exit_date': None,
+        'pnl': 0,
+        'pnl_pct': 0
+    }
+    
+    exists = any(s['symbol'] == symbol and s['status'] == 'ACTIVE' for s in st.session_state.active_signals)
+    
+    if not exists:
+        st.session_state.active_signals.append(signal)
+        return True
+    return False
+
+def update_signal_status():
+    """Update le statut de tous les signaux actifs"""
+    to_close = []
+    
+    for idx, signal in enumerate(st.session_state.active_signals):
+        if signal['status'] != 'ACTIVE':
+            continue
+        
+        current_price = get_current_price(signal['symbol'])
+        
+        if current_price > 0:
+            if current_price >= signal['tp3']:
+                signal['exit_price'] = signal['tp3']
+                signal['exit_reason'] = 'TP3 HIT ✅'
+                signal['exit_date'] = datetime.now().strftime('%Y-%m-%d %H:%M')
+                signal['pnl'] = signal['tp3'] - signal['entry_price']
+                signal['pnl_pct'] = ((signal['tp3'] / signal['entry_price']) - 1) * 100
+                signal['status'] = 'CLOSED'
+                to_close.append(idx)
+                
+                if st.session_state.telegram_enabled:
+                    msg = f"🎯 TP3 HIT!\n\n{signal['tier']} {signal['symbol']}\nEntry: ${signal['entry_price']:.2f}\nExit: ${signal['tp3']:.2f}\n💰 P&L: ${signal['pnl']:.2f} (+{signal['pnl_pct']:.1f}%)"
+                    send_telegram_alert(msg)
+            
+            elif current_price >= signal['tp2']:
+                signal['exit_price'] = signal['tp2']
+                signal['exit_reason'] = 'TP2 HIT ✅'
+                signal['exit_date'] = datetime.now().strftime('%Y-%m-%d %H:%M')
+                signal['pnl'] = signal['tp2'] - signal['entry_price']
+                signal['pnl_pct'] = ((signal['tp2'] / signal['entry_price']) - 1) * 100
+                signal['status'] = 'CLOSED'
+                to_close.append(idx)
+                
+                if st.session_state.telegram_enabled:
+                    msg = f"🎯 TP2 HIT!\n\n{signal['tier']} {signal['symbol']}\nEntry: ${signal['entry_price']:.2f}\nExit: ${signal['tp2']:.2f}\n💰 P&L: ${signal['pnl']:.2f} (+{signal['pnl_pct']:.1f}%)"
+                    send_telegram_alert(msg)
+            
+            elif current_price >= signal['tp1']:
+                signal['exit_price'] = signal['tp1']
+                signal['exit_reason'] = 'TP1 HIT ✅'
+                signal['exit_date'] = datetime.now().strftime('%Y-%m-%d %H:%M')
+                signal['pnl'] = signal['tp1'] - signal['entry_price']
+                signal['pnl_pct'] = ((signal['tp1'] / signal['entry_price']) - 1) * 100
+                signal['status'] = 'CLOSED'
+                to_close.append(idx)
+                
+                if st.session_state.telegram_enabled:
+                    msg = f"✅ TP1 HIT!\n\n{signal['tier']} {signal['symbol']}\nEntry: ${signal['entry_price']:.2f}\nExit: ${signal['tp1']:.2f}\n💰 P&L: ${signal['pnl']:.2f} (+{signal['pnl_pct']:.1f}%)"
+                    send_telegram_alert(msg)
+            
+            elif current_price <= signal['stop']:
+                signal['exit_price'] = signal['stop']
+                signal['exit_reason'] = 'STOP HIT ❌'
+                signal['exit_date'] = datetime.now().strftime('%Y-%m-%d %H:%M')
+                signal['pnl'] = signal['stop'] - signal['entry_price']
+                signal['pnl_pct'] = ((signal['stop'] / signal['entry_price']) - 1) * 100
+                signal['status'] = 'CLOSED'
+                to_close.append(idx)
+                
+                if st.session_state.telegram_enabled:
+                    msg = f"🛑 STOP HIT!\n\n{signal['tier']} {signal['symbol']}\nEntry: ${signal['entry_price']:.2f}\nExit: ${signal['stop']:.2f}\n💸 P&L: ${signal['pnl']:.2f} ({signal['pnl_pct']:.1f}%)"
+                    send_telegram_alert(msg)
+    
+    for idx in reversed(to_close):
+        closed_signal = st.session_state.active_signals.pop(idx)
+        st.session_state.closed_signals.append(closed_signal)
+
 # ==================== CACHE ====================
 @st.cache_data(ttl=300)
 def get_live_data(symbol, period="1mo", interval="1d"):
@@ -61,7 +175,7 @@ def get_live_data(symbol, period="1mo", interval="1d"):
     except:
         return None
 
-# ==================== MARCHÉS ====================
+# ==================== MARCHÉS COMPLETS ====================
 MARKETS = {
     "🔥 TOP 10 US": [
         "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", 
@@ -107,133 +221,134 @@ MARKETS = {
         # Mid-Large Caps (101-150)
         "PH", "EQIX", "ITW", "BDX", "NOC", "USB", "APH", "MCO", "WM", "SHW",
         "CMG", "MSI", "FI", "TGT", "APO", "PNC", "HCA", "MAR", "CL", "MCK",
-        "NSC", "EMR", "GM", "COF", "MMM", "CARR", "PSA", "EOG", "TT", "GD",
-        "WELL", "CVS", "ORLY", "TDG", "AJG", "ECL", "APD", "ROP", "AIG", "PCAR",
-        "ADSK", "NXPI", "AFL", "SRE", "PAYX", "F", "KMB", "FCX", "AZO", "MPC",
+        "NSC", "EMR", "GM", "COF", "MMM", "CARR", "PSA", "TT", "GD", "WELL",
+        "CVS", "ORLY", "TDG", "AJG", "ECL", "APD", "ROP", "AIG", "PCAR", "ADSK",
+        "NXPI", "AFL", "SRE", "PAYX", "F", "KMB", "FCX", "AZO", "MPC", "ROST",
         
         # Mid Caps (151-200)
-        "ROST", "CTVA", "KLAC", "FDX", "MCHP", "TEL", "TRV", "O", "D", "HLT",
-        "AMT", "BK", "DD", "ODFL", "ALL", "KMI", "JCI", "HUM", "LHX", "EW",
-        "PSX", "VLO", "A", "PRU", "YUM", "SLB", "CTAS", "KHC", "FAST", "CEG",
-        "GWW", "MRNA", "SPG", "EL", "IQV", "DLR", "CTSH", "RSG", "CPRT", "OTIS",
-        "NDAQ", "MSCI", "CCI", "VRSK", "CMI", "KR", "IDXX", "PPG", "EA", "GIS",
+        "CTVA", "FDX", "MCHP", "TEL", "TRV", "O", "D", "HLT", "AMT", "BK",
+        "DD", "ODFL", "ALL", "KMI", "JCI", "HUM", "LHX", "EW", "PSX", "VLO",
+        "A", "PRU", "YUM", "CTAS", "KHC", "FAST", "CEG", "GWW", "MRNA", "SPG",
+        "EL", "IQV", "DLR", "CTSH", "RSG", "CPRT", "OTIS", "NDAQ", "MSCI", "CCI",
+        "VRSK", "CMI", "KR", "IDXX", "PPG", "EA", "GIS", "BKR", "DXCM", "DHI",
         
         # Small-Mid Caps (201-250)
-        "BKR", "DXCM", "DHI", "GEHC", "IT", "GLW", "XYL", "ED", "VICI", "RMD",
-        "WMB", "LEN", "ANSS", "CHTR", "OKE", "AME", "ACGL", "DOW", "TROW", "STZ",
-        "ADM", "ON", "ROK", "VMC", "AWK", "BIIB", "EXC", "HWM", "EXR", "CBRE",
-        "HPQ", "MTD", "PCG", "PWR", "FITB", "KEYS", "WAB", "WEC", "FTV", "URI",
-        "ZBH", "NEM", "CAH", "AEE", "LYB", "DOV", "STT", "ETR", "HPE", "PPL",
+        "GEHC", "IT", "GLW", "XYL", "ED", "VICI", "RMD", "WMB", "LEN", "ANSS",
+        "CHTR", "OKE", "AME", "ACGL", "DOW", "TROW", "STZ", "ADM", "ON", "ROK",
+        "VMC", "AWK", "BIIB", "EXC", "HWM", "EXR", "CBRE", "HPQ", "MTD", "PCG",
+        "PWR", "FITB", "KEYS", "WAB", "WEC", "FTV", "URI", "ZBH", "NEM", "CAH",
+        "AEE", "LYB", "DOV", "STT", "ETR", "HPE", "PPL", "MPWR", "TSCO", "SBAC",
         
         # Small Caps (251-300)
-        "MPWR", "TSCO", "SBAC", "AEP", "TTWO", "HBAN", "EFX", "ALGN", "DTE", "TYL",
-        "ES", "TDY", "INVH", "FE", "PTC", "IR", "RJF", "FANG", "EIX", "MTB",
-        "STLD", "AVB", "TSN", "ARE", "EBAY", "WDC", "RF", "BALL", "DFS", "NTRS",
-        "K", "IFF", "CNP", "DAL", "BAX", "SYF", "HOLX", "LH", "ILMN", "PFG",
-        "CLX", "MKC", "CFG", "CINF", "LDOS", "DGX", "WAT", "EXPE", "LUV", "CAG",
+        "AEP", "TTWO", "HBAN", "EFX", "ALGN", "DTE", "TYL", "ES", "TDY", "INVH",
+        "FE", "PTC", "IR", "RJF", "FANG", "EIX", "MTB", "STLD", "AVB", "TSN",
+        "ARE", "EBAY", "WDC", "RF", "BALL", "DFS", "NTRS", "K", "IFF", "CNP",
+        "DAL", "BAX", "SYF", "HOLX", "LH", "ILMN", "PFG", "CLX", "MKC", "CFG",
+        "CINF", "LDOS", "DGX", "WAT", "EXPE", "LUV", "CAG", "BBY", "ZBRA", "GPN",
         
         # Smaller Caps (301-350)
-        "BBY", "ZBRA", "GPN", "OMC", "APTV", "MAA", "DRI", "TRGP", "TER", "LVS",
-        "HSY", "EXPD", "CBOE", "VRSN", "ULTA", "STE", "VTRS", "TECH", "CTRA", "SJM",
-        "KEY", "J", "JBHT", "ESS", "PEG", "MAS", "AKAM", "EPAM", "SNA", "TXT",
-        "CMS", "AMCR", "HUBB", "BLDR", "SWKS", "NVR", "EQR", "WRB", "PEAK", "CTLT",
-        "EVRG", "CHRW", "PAYC", "TFX", "JKHY", "BRO", "LW", "NDSN", "UDR", "ATO",
+        "OMC", "APTV", "MAA", "DRI", "TRGP", "TER", "LVS", "HSY", "EXPD", "CBOE",
+        "VRSN", "ULTA", "STE", "VTRS", "TECH", "CTRA", "SJM", "KEY", "J", "JBHT",
+        "ESS", "PEG", "MAS", "AKAM", "EPAM", "SNA", "TXT", "CMS", "AMCR", "HUBB",
+        "BLDR", "SWKS", "NVR", "EQR", "WRB", "PEAK", "CTLT", "EVRG", "CHRW", "PAYC",
+        "TFX", "JKHY", "BRO", "LW", "NDSN", "UDR", "ATO", "NCLH", "HST", "L",
         
         # Smaller Caps (351-400)
-        "NCLH", "HST", "L", "POOL", "FFIV", "REG", "APA", "WYNN", "MOS", "AAL",
-        "GNRC", "IEX", "HII", "BXP", "SWK", "INCY", "IPG", "KIM", "AIZ", "AOS",
-        "CPT", "JNPR", "TAP", "HAS", "HSIC", "BBWI", "PNR", "BF-B", "CRL", "LNT",
-        "ALLE", "MKTX", "BWA", "CCL", "VFC", "RHI", "LKQ", "RL", "FOXA", "NI",
-        "GL", "NRG", "MTCH", "UAL", "WHR", "HRL", "CE", "FRT", "NLSN", "SEE",
+        "POOL", "FFIV", "REG", "APA", "WYNN", "MOS", "AAL", "GNRC", "IEX", "HII",
+        "BXP", "SWK", "INCY", "IPG", "KIM", "AIZ", "AOS", "CPT", "JNPR", "TAP",
+        "HAS", "HSIC", "BBWI", "PNR", "BF-B", "CRL", "LNT", "ALLE", "MKTX", "BWA",
+        "CCL", "VFC", "RHI", "LKQ", "RL", "FOXA", "NI", "GL", "NRG", "MTCH",
+        "UAL", "WHR", "HRL", "CE", "FRT", "NLSN", "SEE", "DXC", "PARA", "DISH",
         
-        # Smaller Caps (401-450)
-        "DXC", "PARA", "DISH", "FMC", "IVZ", "ZION", "ROL", "UHS", "NWSA", "ALK",
-        "DVA", "COO", "MHK", "XRAY", "AAP", "OGN", "PNW", "RCL", "PHM", "PBCT",
-        "ALB", "HBI", "NWL", "EMN", "JBHT", "TPR", "AIV", "MGM", "DVN", "CMA",
-        "DISCK", "WBA", "KMX", "FLS", "PRGO", "IPG", "BEN", "HFC", "FBHS", "CF",
-        "LEG", "GPS", "NOV", "AES", "PKI", "AOS", "FTI", "UAA", "PVH", "NWS",
-        
-        # Final (451-503)
-        "NLOK", "LNC", "LB", "TIF", "CBS", "VAR", "FLIR", "NBL", "HRB", "SLG",
-        "WU", "SEE", "RE", "WHR", "COTY", "PXD", "MAC", "NWL", "HCP", "VNO",
-        "WRK", "LLL", "VIAB", "ARNC", "AMG", "FLR", "JWN", "M", "KSU", "ETFC",
-        "BWA", "GT", "IR", "MYL", "FL", "XEC", "FOX", "HP", "SCG", "UAA",
-        "NFX", "ADS", "DISCA", "INFO", "FTI", "HII", "LYB", "GRMN", "AIV", "APC",
-        "URBN", "TDG", "DRE"
+        # Final Batch (401-503)
+        "FMC", "IVZ", "ZION", "ROL", "UHS", "NWSA", "ALK", "DVA", "COO", "MHK",
+        "XRAY", "AAP", "OGN", "PNW", "RCL", "PHM", "ALB", "HBI", "NWL", "EMN",
+        "TPR", "AIV", "MGM", "DVN", "CMA", "WBA", "KMX", "FLS", "PRGO", "BEN",
+        "HFC", "FBHS", "CF", "LEG", "GPS", "NOV", "AES", "PKI", "FTI", "UAA",
+        "PVH", "NWS", "NLOK", "LNC", "TIF", "CBS", "VAR", "FLIR", "NBL", "HRB",
+        "SLG", "WU", "RE", "COTY", "PXD", "MAC", "HCP", "VNO", "WRK", "LLL",
+        "VIAB", "ARNC", "AMG", "FLR", "JWN", "M", "KSU", "ETFC", "GT", "MYL",
+        "FL", "XEC", "FOX", "HP", "SCG", "NFX", "ADS", "DISCA", "INFO", "HII",
+        "GRMN", "APC", "URBN", "DRE", "LB", "CELG", "ESRX", "MON", "TWX", "SYMC",
+        "CA", "AGN", "ENDP", "BHF"
     ],
     
     "🚀 NASDAQ 100 COMPLET": [
-        # Tech Giants
         "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "GOOG", "TSLA", "AVGO", "NFLX",
         "COST", "AMD", "ADBE", "CSCO", "PEP", "QCOM", "INTC", "TXN", "CMCSA", "INTU",
-        
-        # Tech & Software
         "AMGN", "AMAT", "HON", "ISRG", "BKNG", "PANW", "ADP", "MU", "LRCX", "KLAC",
         "REGN", "GILD", "VRTX", "SNPS", "CDNS", "MRVL", "PYPL", "CRWD", "ABNB", "FTNT",
-        
-        # Mid Caps Tech
         "DXCM", "ADSK", "ORLY", "MELI", "CTAS", "NXPI", "WDAY", "TEAM", "LULU", "DASH",
         "PCAR", "CPRT", "ROST", "KDP", "PAYX", "ODFL", "FAST", "CHTR", "EA", "CTSH",
-        
-        # Growth Tech
         "VRSK", "CEG", "BKR", "DDOG", "GEHC", "ILMN", "BIIB", "TTD", "IDXX", "ZS",
         "CSGP", "ANSS", "WBD", "XEL", "FANG", "ON", "DLTR", "CDW", "MDB", "ZM",
-        
-        # Smaller Caps & Emerging
         "GFS", "MRNA", "ALGN", "SIRI", "WBA", "ENPH", "LCID", "RIVN", "SMCI", "ARM",
-        "COIN", "HOOD", "RBLX", "U", "AFRM", "SNOW", "PLTR", "DKNG", "ROKU", "PINS",
-        
-        # Final Batch
-        "SNAP", "TWLO", "NET", "OKTA", "DOCU", "BILL", "SQ", "SHOP", "SE", "LYFT"
+        "COIN", "HOOD", "RBLX", "U", "AFRM", "SNOW", "PLTR", "DKNG", "ROKU", "PINS"
     ],
     
-    "📊 RUSSELL 2000 (Top 100)": [
-        # High Growth Small Caps
+    "📊 DOW 30": [
+        "AAPL", "MSFT", "AMZN", "UNH", "JNJ", "V", "JPM", "WMT", "PG", "HD",
+        "CVX", "MRK", "DIS", "CSCO", "NKE", "MCD", "VZ", "INTC", "KO", "CRM",
+        "IBM", "AXP", "CAT", "GS", "HON", "BA", "TRV", "MMM", "WBA", "DOW"
+    ],
+    
+    "📈 RUSSELL 2000 (Top 200)": [
+        # Small Cap Growth
         "CVNA", "RBLX", "PLUG", "SNDL", "HOOD", "SAVA", "AMC", "BYND", "LAZR", "SKLZ",
         "SOFI", "OPEN", "WISH", "CLOV", "CLNE", "GOEV", "RIDE", "WKHS", "NKLA", "SPCE",
-        
-        # Gaming & Entertainment
         "DKNG", "PENN", "FUBO", "SONO", "ROKU", "PINS", "SNAP", "TWLO", "NET", "DDOG",
         
-        # Fintech & Tech
+        # Fintech Small Caps
         "CRWD", "ZS", "OKTA", "SNOW", "PLTR", "COIN", "AFRM", "U", "DASH", "ABNB",
         "LYFT", "UBER", "DOCU", "BILL", "SQ", "SHOP", "SE", "MELI", "PYPL", "Z",
         
         # Biotech Small Caps
         "MRNA", "NVAX", "VXRT", "INO", "SRNE", "OCGN", "CODX", "VBIV", "BNGO", "GEVO",
+        "SAVA", "BIIB", "SRNE", "GILD", "REGN", "VRTX", "BMRN", "ALNY", "IONS", "BLUE",
         
-        # Energy & Commodities
+        # Energy Small Caps
         "FCEL", "BE", "CLSK", "MARA", "RIOT", "HUT", "BITF", "SOS", "EBON", "CAN",
+        "DVN", "FANG", "MRO", "APA", "EOG", "OXY", "COP", "HAL", "SLB", "NOV",
         
-        # Retail & Consumer
+        # Retail Small Caps
         "GME", "BB", "NOK", "KOSS", "EXPR", "BBBY", "NAKD", "SNDL", "TLRY", "APHA",
+        "WOOF", "CHWY", "PTON", "ETSY", "W", "RH", "FIVE", "OLLI", "DKS", "DICK",
         
         # Industrial Small Caps
         "BLNK", "CHPT", "EVGO", "QS", "FSR", "ARVL", "MULN", "AYRO", "SOLO", "ELMS",
+        "WKHS", "RIDE", "HYLN", "GOEV", "NKLA", "XL", "ACTC", "CLII", "CIIC", "DCRB",
         
-        # Healthcare Small Caps
-        "SAVA", "BIIB", "SRNE", "GILD", "REGN", "VRTX", "BMRN", "ALNY", "IONS", "BLUE"
+        # Tech Small Caps
+        "CRSP", "NTLA", "EDIT", "BEAM", "VCYT", "PACB", "ILMN", "NVTA", "TWST", "FATE",
+        "BLUE", "RGEN", "LGVW", "ARKG", "GNOM", "HELX", "XBI", "IBB", "LABU", "LABD",
+        
+        # Consumer Small Caps
+        "BYND", "TTCF", "OTLY", "VFF", "CGC", "ACB", "CRON", "HEXO", "OGI", "APHA",
+        "TLRY", "CURLF", "GTBIF", "TCNNF", "CRLBF", "HRVSF", "TRUL", "MSOS", "MJ", "YOLO",
+        
+        # Misc Small Caps
+        "SPCE", "ASTR", "ASTS", "MNTS", "RKLB", "VACQ", "HOL", "SFTW", "DMYI", "AJAX",
+        "PSTH", "CCIV", "ACTC", "IPOE", "IPOF", "SoFi", "DKNG", "OPEN", "MPLN", "OUST"
     ],
     
-    "⚡ FUTURES": [
-        "ES=F",    # S&P 500 Futures
-        "NQ=F",    # Nasdaq Futures
-        "YM=F",    # Dow Futures
-        "RTY=F",   # Russell 2000 Futures
-        "GC=F",    # Gold Futures
-        "SI=F",    # Silver Futures
-        "CL=F",    # Crude Oil WTI
-        "NG=F",    # Natural Gas
-        "ZB=F",    # 30-Year T-Bond
-        "ZN=F"     # 10-Year T-Note
+    "⚡ FUTURES COMPLET": [
+        "ES=F", "NQ=F", "YM=F", "RTY=F",  # Indices
+        "GC=F", "SI=F", "HG=F", "PA=F", "PL=F",  # Métaux
+        "CL=F", "NG=F", "HO=F", "RB=F",  # Énergie
+        "ZB=F", "ZN=F", "ZF=F", "ZT=F",  # Bonds
+        "6E=F", "6J=F", "6B=F", "6C=F"  # Devises
     ],
     
-    "₿ CRYPTO TOP 30": [
+    "₿ CRYPTO TOP 50": [
         "BTC-USD", "ETH-USD", "BNB-USD", "SOL-USD", "XRP-USD", "ADA-USD",
         "AVAX-USD", "DOGE-USD", "DOT-USD", "MATIC-USD", "SHIB-USD", "LTC-USD",
         "UNI-USD", "LINK-USD", "ATOM-USD", "XLM-USD", "ALGO-USD", "VET-USD",
         "ICP-USD", "FIL-USD", "HBAR-USD", "APT-USD", "ARB-USD", "OP-USD",
-        "NEAR-USD", "AAVE-USD", "GRT-USD", "SAND-USD", "MANA-USD", "AXS-USD"
+        "NEAR-USD", "AAVE-USD", "GRT-USD", "SAND-USD", "MANA-USD", "AXS-USD",
+        "ETC-USD", "XMR-USD", "BCH-USD", "EOS-USD", "TRX-USD", "XTZ-USD",
+        "THETA-USD", "FTM-USD", "EGLD-USD", "RUNE-USD", "ZEC-USD", "DASH-USD",
+        "COMP-USD", "YFI-USD", "SNX-USD", "MKR-USD", "SUSHI-USD", "CRV-USD",
+        "BAT-USD", "ENJ-USD"
     ],
     
     "🇨🇦 TSX TOP 30": [
@@ -246,22 +361,30 @@ MARKETS = {
     "🔋 AI & TECH": [
         "NVDA", "AMD", "AVGO", "QCOM", "INTC", "TSM", "ASML", "AMAT", "LRCX", "KLAC",
         "PLTR", "SNOW", "DDOG", "NET", "CRWD", "ZS", "PANW", "FTNT", "OKTA", "S",
-        "AI", "BBAI", "SOUN", "PATH", "UPST", "C3AI"
+        "AI", "BBAI", "SOUN", "PATH", "UPST", "C3AI", "SMCI", "ARM", "IONQ", "RGTI"
     ],
     
-    "🏥 BIOTECH TOP 30": [
+    "🏥 BIOTECH": [
         "LLY", "JNJ", "ABBV", "MRK", "PFE", "TMO", "ABT", "BMY", "AMGN", "GILD",
-        "REGN", "VRTX", "ISRG", "BSX", "MDT", "SYK", "ZTS", "BIIB", "MRNA", "ILMN",
-        "BMRN", "ALNY", "IONS", "BLUE", "CRSP", "NTLA", "EDIT", "BEAM", "VRTX", "INCY"
+        "REGN", "VRTX", "ISRG", "BSX", "MDT", "SYK", "ZTS", "BIIB", "MRNA", "ILMN"
     ],
     
     "⚡ CLEAN ENERGY": [
         "TSLA", "ENPH", "SEDG", "FSLR", "RUN", "PLUG", "BE", "BLNK", "CHPT", "NEE",
-        "ICLN", "TAN", "PBW", "QCLN", "FCEL", "CLSK"
+        "FCEL", "CLSK", "QS", "FSR"
     ],
     
     "🎮 GAMING": [
         "RBLX", "EA", "ATVI", "TTWO", "U", "GME", "DKNG", "PENN", "NFLX", "DIS"
+    ],
+    
+    "🌎 ALL MARKETS (AUTO-SCAN)": [
+        # Top 50 pour auto-scan rapide
+        "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "BRK-B", "LLY", "V",
+        "AVGO", "WMT", "JPM", "MA", "XOM", "UNH", "ORCL", "HD", "COST", "PG",
+        "JNJ", "NFLX", "BAC", "CRM", "AMD", "ABBV", "CVX", "MRK", "KO", "ADBE",
+        "PEP", "TMO", "ACN", "CSCO", "LIN", "MCD", "ABT", "INTC", "DIS", "CMCSA",
+        "WFC", "DHR", "VZ", "TXN", "PM", "QCOM", "NEE", "IBM", "HON", "UNP"
     ]
 }
 
@@ -724,13 +847,16 @@ def calculate_targets(entry, atr, ai_score):
     return stop, tp1, tp2, tp3
 
 # ==================== SCANNER ====================
-def scan_market_quantum(symbols, min_score=220, min_ai=75):
+def scan_market_quantum(symbols, min_score=220, min_ai=75, show_progress=True):
     results = []
-    progress_bar = st.progress(0)
-    status = st.empty()
+    
+    if show_progress:
+        progress_bar = st.progress(0)
+        status = st.empty()
     
     for i, symbol in enumerate(symbols):
-        status.text(f"🔍 Quantum Scanning {symbol}... ({i+1}/{len(symbols)})")
+        if show_progress:
+            status.text(f"🔍 Quantum Scanning {symbol}... ({i+1}/{len(symbols)})")
         
         df = get_live_data(symbol, period="3mo", interval="1d")
         
@@ -790,13 +916,35 @@ def scan_market_quantum(symbols, min_score=220, min_ai=75):
                     'Recommendation': analysis['recommendation']
                 })
         
-        progress_bar.progress((i + 1) / len(symbols))
+        if show_progress:
+            progress_bar.progress((i + 1) / len(symbols))
         time.sleep(0.05)
     
-    progress_bar.empty()
-    status.empty()
+    if show_progress:
+        progress_bar.empty()
+        status.empty()
     
     return pd.DataFrame(results)
+
+# ==================== AUTO-SCAN FUNCTION ====================
+def run_auto_scan():
+    """Lance un auto-scan toutes les 30 minutes"""
+    symbols = MARKETS["🌎 ALL MARKETS (AUTO-SCAN)"]
+    results = scan_market_quantum(symbols, min_score=240, min_ai=80, show_progress=False)
+    
+    if len(results) > 0:
+        st.session_state.auto_scan_results = results
+        st.session_state.last_auto_scan = datetime.now()
+        
+        # Auto-track les meilleurs signaux
+        for _, row in results.iterrows():
+            if row['Tier'] in ['💎 DIAMOND', '🥇 PLATINUM']:
+                add_signal_to_tracker(
+                    row['Symbol'], row['Entry'], row['Stop'],
+                    row['TP1'], row['TP2'], row['TP3'],
+                    row['Quantum'], row['AI'], row['Tier'],
+                    row['Flow'], row['RSI']
+                )
 
 # ==================== BACKTEST ENGINE ====================
 def run_backtest(symbol, period="6mo", initial_capital=10000):
@@ -1079,7 +1227,7 @@ with col1:
     st.markdown("# 🥓")
 with col2:
     st.markdown("# BACON TRADER PRO")
-    st.caption("⚡ QUANTUM ULTIMATE | ⭐ 80% Setup | 📱 Telegram | 🧪 Backtest")
+    st.caption("⚡ QUANTUM ULTIMATE | ⭐ 80% Setup | 📱 Telegram | 🧪 Backtest | 🔄 AUTO-SCAN")
 with col3:
     st.metric("Status", "LIVE 🔴")
 
@@ -1095,6 +1243,36 @@ with st.sidebar:
         st.success("✅ Telegram ON")
     else:
         st.info("📴 Telegram OFF")
+    
+    st.markdown("---")
+    
+    # AUTO-SCAN
+    st.subheader("🔄 AUTO-SCAN (30min)")
+    
+    st.session_state.auto_scan_enabled = st.toggle("Enable Auto-Scan", value=st.session_state.auto_scan_enabled, key="toggle_autoscan")
+    
+    if st.session_state.auto_scan_enabled:
+        st.success("✅ Auto-Scan ACTIVE")
+        
+        if st.session_state.last_auto_scan:
+            next_scan = st.session_state.last_auto_scan + timedelta(minutes=30)
+            time_until = (next_scan - datetime.now()).total_seconds()
+            
+            if time_until > 0:
+                st.info(f"Next scan in {int(time_until/60)} min")
+            else:
+                st.warning("Scan en attente...")
+                if st.button("🚀 FORCE SCAN NOW"):
+                    with st.spinner("Auto-scanning..."):
+                        run_auto_scan()
+                    st.rerun()
+        else:
+            if st.button("🚀 START AUTO-SCAN"):
+                with st.spinner("Running first scan..."):
+                    run_auto_scan()
+                st.rerun()
+    else:
+        st.info("📴 Auto-Scan OFF")
     
     st.markdown("---")
     
@@ -1152,37 +1330,57 @@ with st.sidebar:
     st.success("✅ 80% Setup Filter")
     st.success("✅ Telegram Alerts")
     st.success("✅ Backtest Engine")
-    st.success("✅ Live Position Tracking")
+    st.success("✅ Signal Tracker")
+    st.success("✅ Auto-Scan (30min)")
+    st.success("✅ 503 S&P 500 Stocks")
     
     st.markdown("---")
-    st.caption("🥓 Bacon Trader Pro Quantum v3.3")
+    st.caption("🥓 Bacon Trader Pro v4.0 ULTIMATE")
     st.caption(f"⏰ {datetime.now().strftime('%H:%M:%S')}")
 
+# ==================== CHECK AUTO-SCAN ====================
+if st.session_state.auto_scan_enabled and st.session_state.last_auto_scan:
+    time_since_scan = (datetime.now() - st.session_state.last_auto_scan).total_seconds()
+    if time_since_scan >= 1800:  # 30 minutes
+        run_auto_scan()
+
 # ==================== MAIN TABS ====================
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "🎯 Dashboard",
     "💼 Portfolio Day",
     "📈 Portfolio LT",
     "🔍 Quantum Scanner",
     "🧠 Smart Money",
-    "🧪 Backtest"
+    "🧪 Backtest",
+    "📊 Signal Tracker"
 ])
 
 # TAB 1: DASHBOARD
 with tab1:
     st.header("🎯 QUANTUM DASHBOARD")
     
+    # Update signal status
+    update_signal_status()
+    
     day_stats = calculate_portfolio_stats('day')
     lt_stats = calculate_portfolio_stats('long')
     total_equity = day_stats['total_value'] + lt_stats['total_value']
     
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("Total Equity", f"${total_equity:,.0f}")
     col2.metric("Day Trading", f"${day_stats['total_value']:,.0f}", f"{day_stats['total_pnl_pct']:+.2f}%")
     col3.metric("Long-Term", f"${lt_stats['total_value']:,.0f}", f"{lt_stats['total_pnl_pct']:+.2f}%")
-    col4.metric("Total Positions", len(st.session_state.day_positions) + len(st.session_state.long_positions))
+    col4.metric("Active Signals", len(st.session_state.active_signals))
+    col5.metric("Total Positions", len(st.session_state.day_positions) + len(st.session_state.long_positions))
     
     st.markdown("---")
+    
+    # Auto-scan results
+    if st.session_state.auto_scan_enabled and len(st.session_state.auto_scan_results) > 0:
+        st.subheader("🔄 LATEST AUTO-SCAN RESULTS")
+        st.caption(f"Last scan: {st.session_state.last_auto_scan.strftime('%Y-%m-%d %H:%M:%S')}")
+        st.dataframe(st.session_state.auto_scan_results, use_container_width=True, hide_index=True)
+        st.markdown("---")
     
     st.subheader("⚡ QUANTUM QUICK SCAN")
     
@@ -1278,233 +1476,4 @@ with tab4:
             symbols = MARKETS[market]
             
             with st.spinner(f"Quantum scanning {len(symbols)} symbols..."):
-                results = scan_market_quantum(symbols, min_quantum, min_ai)
-            
-            if len(results) > 0:
-                if show_80_only:
-                    results = results[results['80% Setup'] == '⭐']
-                
-                setups_80 = results[results['80% Setup'] == '⭐']
-                
-                if len(setups_80) > 0:
-                    st.success(f"⭐ {len(setups_80)} HIGH PROBABILITY (80%) SETUPS!")
-                    
-                    for _, row in setups_80.iterrows():
-                        whale_text = " 🐋 WHALE!" if row['Whale'] == '🐋' else ""
-                        
-                        st.markdown(f"""
-                        <div class="setup-80">
-                        <h2>⭐ {row['Symbol']} - 80% WIN RATE SETUP{whale_text}</h2>
-                        <p><b>Quantum:</b> {row['Quantum']:.0f}/300 | <b>AI:</b> {row['AI']:.0f}/100 | <b>Tier:</b> {row['Tier']}</p>
-                        <p><b>Entry:</b> ${row['Entry']} | <b>Stop:</b> ${row['Stop']}</p>
-                        <p><b>Targets:</b> TP1: ${row['TP1']} | TP2: ${row['TP2']} | TP3: ${row['TP3']}</p>
-                        <p><b>Flow:</b> {row['Flow']} | <b>RSI:</b> {row['RSI']}</p>
-                        <p>🎯 <b>Ultra-conservative setup - High confidence trade</b></p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                
-                st.dataframe(results, use_container_width=True, hide_index=True)
-                st.success(f"✅ {len(results)} signals | {datetime.now().strftime('%H:%M:%S')}")
-            else:
-                st.warning(f"⚠️ No signals found")
-        else:
-            st.info("👈 Configure and click QUANTUM SCAN")
-
-# TAB 5: SMART MONEY
-with tab5:
-    st.header("🧠 SMART MONEY ANALYSIS")
-    
-    sm_col1, sm_col2 = st.columns([1, 3])
-    
-    with sm_col1:
-        sm_symbol = st.text_input("Symbol", "NVDA", key="smart_money_symbol").upper()
-        sm_analyze = st.button("🔍 ANALYZE", type="primary", use_container_width=True, key="btn_smart_analyze")
-    
-    with sm_col2:
-        if sm_analyze:
-            df = get_live_data(sm_symbol, "3mo", "1d")
-            
-            if df is not None:
-                analysis = calculate_quantum_ai_score(df, sm_symbol)
-                
-                if analysis['setup_80']['valid']:
-                    st.markdown(f"""
-                    <div class="setup-80">
-                    <h2>⭐ 80% WIN RATE SETUP DETECTED!</h2>
-                    <p><b>Setup Score:</b> {analysis['setup_80']['score']}/100</p>
-                    <p><b>Confidence:</b> {analysis['setup_80']['confidence']}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    st.subheader("📋 Setup Criteria:")
-                    for reason in analysis['setup_80']['reasons']:
-                        if reason.startswith('✅'):
-                            st.success(reason)
-                        else:
-                            st.warning(reason)
-                
-                if analysis['whale_alert']:
-                    st.markdown(f"""
-                    <div class="whale-alert">
-                    <h2>🐋 WHALE ALERT!</h2>
-                    <p>Volume: {analysis['order_flow']['vol_ratio']:.2f}x average</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                m1, m2, m3, m4, m5 = st.columns(5)
-                m1.metric("Quantum", f"{analysis['quantum_score']:.0f}/300")
-                m2.metric("Tier", analysis['tier'])
-                m3.metric("Flow", analysis['order_flow']['imbalance'])
-                m4.metric("Structure", analysis['smc']['bias'])
-                m5.metric("80% Setup", "YES" if analysis['setup_80']['valid'] else "NO")
-                
-                st.markdown("---")
-                
-                c1, c2 = st.columns(2)
-                
-                with c1:
-                    st.subheader("📊 ORDER FLOW")
-                    st.metric("Cumulative Delta", f"{analysis['order_flow']['cumulative_delta']:,.0f}")
-                    st.metric("Flow Score", f"{analysis['order_flow']['flow_score']:.1f}/100")
-                    st.metric("Imbalance", analysis['order_flow']['imbalance'])
-                    
-                    st.markdown("---")
-                    
-                    st.subheader("📈 VOLUME PROFILE")
-                    st.metric("POC", f"${analysis['volume_profile']['poc']:.2f}")
-                    st.metric("VAH", f"${analysis['volume_profile']['vah']:.2f}")
-                    st.metric("VAL", f"${analysis['volume_profile']['val']:.2f}")
-                
-                with c2:
-                    st.subheader("🎯 SFP SIGNALS")
-                    if analysis['sfp_signals']:
-                        for sfp in analysis['sfp_signals'][-3:]:
-                            st.info(f"**{sfp['type']}** @ ${sfp['level']:.2f} ({sfp['date'].strftime('%Y-%m-%d')})")
-                    else:
-                        st.info("No recent SFP")
-                    
-                    st.markdown("---")
-                    
-                    st.subheader("🏛️ MARKET STRUCTURE")
-                    st.metric("Structure", analysis['smc']['structure'])
-                    st.metric("Bias", analysis['smc']['bias'])
-                    
-                    if analysis['smc']['order_blocks']:
-                        st.info(f"{len(analysis['smc']['order_blocks'])} Order Blocks")
-            else:
-                st.error(f"❌ No data for {sm_symbol}")
-
-# TAB 6: BACKTEST
-with tab6:
-    st.header("🧪 QUANTUM BACKTEST ENGINE")
-    
-    col1, col2 = st.columns([1, 3])
-    
-    with col1:
-        bt_symbol = st.text_input("Symbol", "NVDA", key="backtest_symbol").upper()
-        bt_period = st.selectbox("Period", ["3mo", "6mo", "1y", "2y"], index=1, key="backtest_period")
-        bt_capital = st.number_input("Initial Capital", min_value=1000, value=10000, step=1000, key="backtest_capital")
-        
-        run_bt = st.button("🚀 RUN BACKTEST", type="primary", use_container_width=True, key="btn_run_backtest")
-    
-    with col2:
-        if run_bt:
-            with st.spinner(f"Backtesting {bt_symbol} over {bt_period}..."):
-                bt_results = run_backtest(bt_symbol, bt_period, bt_capital)
-            
-            if bt_results:
-                stats = bt_results['stats']
-                
-                st.success(f"✅ Backtest completed for {bt_symbol}")
-                
-                col1, col2, col3, col4, col5 = st.columns(5)
-                col1.metric("Total Trades", stats['Total Trades'])
-                col2.metric("Win Rate", f"{stats['Win Rate']:.1f}%")
-                col3.metric("Total P&L", f"${stats['Total P&L']:.0f}", f"{stats['Total P&L%']:.1f}%")
-                col4.metric("Profit Factor", f"{stats['Profit Factor']:.2f}")
-                col5.metric("Final Balance", f"${stats['Final Balance']:,.0f}")
-                
-                st.markdown("---")
-                
-                col1, col2, col3, col4 = st.columns(4)
-                col1.metric("Avg Win", f"${stats['Avg Win']:.2f}")
-                col2.metric("Avg Loss", f"${stats['Avg Loss']:.2f}")
-                col3.metric("Max DD", f"{stats['Max Drawdown']:.2f}%")
-                col4.metric("Sharpe Ratio", f"{stats['Sharpe Ratio']:.2f}")
-                
-                st.markdown("---")
-                
-                st.subheader("📈 Equity Curve")
-                
-                fig = go.Figure()
-                
-                fig.add_trace(go.Scatter(
-                    x=bt_results['dates'],
-                    y=bt_results['equity_curve'],
-                    mode='lines',
-                    name='Equity',
-                    line=dict(color='lime', width=3),
-                    fill='tozeroy',
-                    fillcolor='rgba(0,255,0,0.1)'
-                ))
-                
-                fig.add_hline(y=bt_capital, line_dash="dash", line_color="orange",
-                             annotation_text="Initial Capital")
-                
-                fig.update_layout(
-                    template='plotly_dark',
-                    height=400,
-                    xaxis_title="Date",
-                    yaxis_title="Balance ($)",
-                    showlegend=True
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
-                
-                st.markdown("---")
-                
-                st.subheader("📋 All Trades")
-                st.dataframe(bt_results['trades'], use_container_width=True, height=400, hide_index=True)
-                
-                st.markdown("---")
-                st.subheader("📊 Trade Analysis")
-                
-                c1, c2 = st.columns(2)
-                
-                with c1:
-                    st.metric("Wins", stats['Wins'], "🟢")
-                    st.metric("Losses", stats['Losses'], "🔴")
-                
-                with c2:
-                    exit_reasons = bt_results['trades']['Exit Reason'].value_counts()
-                    st.write("**Exit Reasons:**")
-                    for reason, count in exit_reasons.items():
-                        st.write(f"• {reason}: {count} trades")
-            else:
-                st.error(f"❌ Unable to backtest {bt_symbol}")
-        else:
-            st.info("👈 Configure backtest parameters and click RUN BACKTEST")
-            
-            st.markdown("---")
-            st.subheader("ℹ️ Backtest Info")
-            st.write("""
-            **Stratégie testée :**
-            - Entry: Quantum Score >= 220 + BUY/STRONG BUY signal
-            - Exits: TP1/TP2/TP3 ou Stop Loss (ATR-based)
-            - Risk: 2% du capital par trade
-            - Time exit: 20 jours max par position
-            
-            **Métriques clés :**
-            - **Win Rate**: % de trades gagnants
-            - **Profit Factor**: Ratio gains/pertes
-            - **Sharpe Ratio**: Rendement ajusté au risque
-            - **Max Drawdown**: Plus grosse perte depuis un sommet
-            """)
-
-# ==================== FOOTER ====================
-st.markdown("---")
-st.caption("🥓 Bacon Trader Pro - QUANTUM ULTIMATE EDITION v3.3")
-st.caption("✨ Order Flow | Volume Profile | SFP | Elliott Wave | SMC | Whale Detection")
-st.caption("⭐ 80% Win Rate Setup | 📱 Telegram Alerts | 🧪 Full Backtest Engine")
-st.caption(f"🕐 Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S EST')}")
-st.caption("🚀 Built by traders, for traders. #WeBacon 🥓")
+                results = scan_market_
