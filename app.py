@@ -66,40 +66,41 @@ if 'auto_scan_results' not in st.session_state:
 
 # ==================== SIGNAL TRACKER FUNCTIONS ====================
 def add_signal_to_tracker(symbol, entry, stop, tp1, tp2, tp3, quantum_score, ai_score, tier, flow, rsi):
-    """Ajoute un signal au tracker"""
+    """Ajoute un signal au tracker - Version améliorée"""
     
-    # Vérifie si le signal existe déjà (ACTIVE seulement)
-    exists = any(s['symbol'] == symbol and s['status'] == 'ACTIVE' for s in st.session_state.active_signals)
-    
-    if exists:
-        return False
-    
-    signal = {
-        'symbol': symbol,
-        'entry_price': float(entry),
-        'entry_date': datetime.now().strftime('%Y-%m-%d %H:%M'),
-        'stop': float(stop),
-        'tp1': float(tp1),
-        'tp2': float(tp2),
-        'tp3': float(tp3),
-        'quantum_score': float(quantum_score),
-        'ai_score': float(ai_score),
-        'tier': tier,
-        'flow': flow,
-        'rsi': float(rsi),
-        'status': 'ACTIVE',
-        'exit_price': None,
-        'exit_reason': None,
-        'exit_date': None,
-        'pnl': 0,
-        'pnl_pct': 0
-    }
-    
-    st.session_state.active_signals.append(signal)
-    
-    # Envoie notification Telegram
-    if st.session_state.telegram_enabled and tier in ['💎 DIAMOND', '🥇 PLATINUM']:
-        msg = f"""
+    try:
+        # Vérifie si le signal existe déjà (ACTIVE seulement)
+        exists = any(s['symbol'] == symbol and s['status'] == 'ACTIVE' for s in st.session_state.active_signals)
+        
+        if exists:
+            return False
+        
+        signal = {
+            'symbol': symbol,
+            'entry_price': float(entry),
+            'entry_date': datetime.now().strftime('%Y-%m-%d %H:%M'),
+            'stop': float(stop),
+            'tp1': float(tp1),
+            'tp2': float(tp2),
+            'tp3': float(tp3),
+            'quantum_score': float(quantum_score),
+            'ai_score': float(ai_score),
+            'tier': tier,
+            'flow': flow,
+            'rsi': float(rsi),
+            'status': 'ACTIVE',
+            'exit_price': None,
+            'exit_reason': None,
+            'exit_date': None,
+            'pnl': 0,
+            'pnl_pct': 0
+        }
+        
+        st.session_state.active_signals.append(signal)
+        
+        # Envoie notification Telegram pour Diamond/Platinum
+        if st.session_state.telegram_enabled and tier in ['💎 DIAMOND', '🥇 PLATINUM']:
+            msg = f"""
 🥓 <b>SIGNAL TRACKED!</b>
 
 {tier} <b>{symbol}</b>
@@ -115,10 +116,14 @@ def add_signal_to_tracker(symbol, entry, stop, tp1, tp2, tp3, quantum_score, ai_
 📊 RSI: {rsi:.1f}
 
 ⚡ Now tracking automatically!
-        """
-        send_telegram_alert(msg)
-    
-    return True
+            """
+            send_telegram_alert(msg)
+        
+        return True
+        
+    except Exception as e:
+        print(f"Error adding signal: {e}")
+        return False
 
 def update_signal_status():
     """Update le statut de tous les signaux actifs"""
@@ -228,87 +233,18 @@ MARKETS = {
         "KLAC", "ETN", "SLB", "CME", "EOG", "DUK", "ICE", "SNPS", "CDNS", "PH"
     ],
     
-    "🇺🇸 S&P 500 COMPLET": [
-        # Mega Caps (1-50)
+    "🇺🇸 S&P 500": [
         "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "GOOG", "META", "TSLA", "BRK-B", "LLY",
         "V", "AVGO", "WMT", "JPM", "MA", "XOM", "UNH", "ORCL", "HD", "COST",
         "PG", "JNJ", "NFLX", "BAC", "CRM", "AMD", "ABBV", "CVX", "MRK", "KO",
         "ADBE", "PEP", "TMO", "ACN", "CSCO", "LIN", "MCD", "ABT", "INTC", "DIS",
-        "CMCSA", "WFC", "DHR", "VZ", "TXN", "PM", "QCOM", "NEE", "IBM", "HON",
-        
-        # Large Caps (51-100)
-        "UNP", "RTX", "AMAT", "LOW", "CAT", "UBER", "INTU", "GE", "MS", "COP",
-        "SPGI", "BKNG", "PLD", "AXP", "ISRG", "SYK", "NOW", "T", "BLK", "AMGN",
-        "DE", "TJX", "PFE", "BSX", "BMY", "MDT", "GILD", "REGN", "VRTX", "ADP",
-        "CB", "SCHW", "MMC", "CI", "LRCX", "ADI", "PANW", "MU", "MDLZ", "SO",
-        "ZTS", "KLAC", "ETN", "SLB", "CME", "EOG", "DUK", "ICE", "SNPS", "CDNS",
-        
-        # Mid-Large Caps (101-150)
-        "PH", "EQIX", "ITW", "BDX", "NOC", "USB", "APH", "MCO", "WM", "SHW",
-        "CMG", "MSI", "FI", "TGT", "APO", "PNC", "HCA", "MAR", "CL", "MCK",
-        "NSC", "EMR", "GM", "COF", "MMM", "CARR", "PSA", "TT", "GD", "WELL",
-        "CVS", "ORLY", "TDG", "AJG", "ECL", "APD", "ROP", "AIG", "PCAR", "ADSK",
-        "NXPI", "AFL", "SRE", "PAYX", "F", "KMB", "FCX", "AZO", "MPC", "ROST",
-        
-        # Mid Caps (151-200)
-        "CTVA", "FDX", "MCHP", "TEL", "TRV", "O", "D", "HLT", "AMT", "BK",
-        "DD", "ODFL", "ALL", "KMI", "JCI", "HUM", "LHX", "EW", "PSX", "VLO",
-        "A", "PRU", "YUM", "CTAS", "KHC", "FAST", "CEG", "GWW", "MRNA", "SPG",
-        "EL", "IQV", "DLR", "CTSH", "RSG", "CPRT", "OTIS", "NDAQ", "MSCI", "CCI",
-        "VRSK", "CMI", "KR", "IDXX", "PPG", "EA", "GIS", "BKR", "DXCM", "DHI",
-        
-        # Small-Mid Caps (201-250)
-        "GEHC", "IT", "GLW", "XYL", "ED", "VICI", "RMD", "WMB", "LEN", "ANSS",
-        "CHTR", "OKE", "AME", "ACGL", "DOW", "TROW", "STZ", "ADM", "ON", "ROK",
-        "VMC", "AWK", "BIIB", "EXC", "HWM", "EXR", "CBRE", "HPQ", "MTD", "PCG",
-        "PWR", "FITB", "KEYS", "WAB", "WEC", "FTV", "URI", "ZBH", "NEM", "CAH",
-        "AEE", "LYB", "DOV", "STT", "ETR", "HPE", "PPL", "MPWR", "TSCO", "SBAC",
-        
-        # Small Caps (251-300)
-        "AEP", "TTWO", "HBAN", "EFX", "ALGN", "DTE", "TYL", "ES", "TDY", "INVH",
-        "FE", "PTC", "IR", "RJF", "FANG", "EIX", "MTB", "STLD", "AVB", "TSN",
-        "ARE", "EBAY", "WDC", "RF", "BALL", "DFS", "NTRS", "K", "IFF", "CNP",
-        "DAL", "BAX", "SYF", "HOLX", "LH", "ILMN", "PFG", "CLX", "MKC", "CFG",
-        "CINF", "LDOS", "DGX", "WAT", "EXPE", "LUV", "CAG", "BBY", "ZBRA", "GPN",
-        
-        # Smaller Caps (301-350)
-        "OMC", "APTV", "MAA", "DRI", "TRGP", "TER", "LVS", "HSY", "EXPD", "CBOE",
-        "VRSN", "ULTA", "STE", "VTRS", "TECH", "CTRA", "SJM", "KEY", "J", "JBHT",
-        "ESS", "PEG", "MAS", "AKAM", "EPAM", "SNA", "TXT", "CMS", "AMCR", "HUBB",
-        "BLDR", "SWKS", "NVR", "EQR", "WRB", "PEAK", "CTLT", "EVRG", "CHRW", "PAYC",
-        "TFX", "JKHY", "BRO", "LW", "NDSN", "UDR", "ATO", "NCLH", "HST", "L",
-        
-        # Smaller Caps (351-400)
-        "POOL", "FFIV", "REG", "APA", "WYNN", "MOS", "AAL", "GNRC", "IEX", "HII",
-        "BXP", "SWK", "INCY", "IPG", "KIM", "AIZ", "AOS", "CPT", "JNPR", "TAP",
-        "HAS", "HSIC", "BBWI", "PNR", "BF-B", "CRL", "LNT", "ALLE", "MKTX", "BWA",
-        "CCL", "VFC", "RHI", "LKQ", "RL", "FOXA", "NI", "GL", "NRG", "MTCH",
-        "UAL", "WHR", "HRL", "CE", "FRT", "NLSN", "SEE", "DXC", "PARA", "DISH",
-        
-        # Final Batch (401-503)
-        "FMC", "IVZ", "ZION", "ROL", "UHS", "NWSA", "ALK", "DVA", "COO", "MHK",
-        "XRAY", "AAP", "OGN", "PNW", "RCL", "PHM", "ALB", "HBI", "NWL", "EMN",
-        "TPR", "AIV", "MGM", "DVN", "CMA", "WBA", "KMX", "FLS", "PRGO", "BEN",
-        "HFC", "FBHS", "CF", "LEG", "GPS", "NOV", "AES", "PKI", "FTI", "UAA",
-        "PVH", "NWS", "NLOK", "LNC", "TIF", "CBS", "VAR", "FLIR", "NBL", "HRB",
-        "SLG", "WU", "RE", "COTY", "PXD", "MAC", "HCP", "VNO", "WRK", "LLL",
-        "VIAB", "ARNC", "AMG", "FLR", "JWN", "M", "KSU", "ETFC", "GT", "MYL",
-        "FL", "XEC", "FOX", "HP", "SCG", "NFX", "ADS", "DISCA", "INFO", "HII",
-        "GRMN", "APC", "URBN", "DRE", "LB", "CELG", "ESRX", "MON", "TWX", "SYMC",
-        "CA", "AGN", "ENDP", "BHF"
+        "CMCSA", "WFC", "DHR", "VZ", "TXN", "PM", "QCOM", "NEE", "IBM", "HON"
     ],
     
-    "🚀 NASDAQ 100 COMPLET": [
+    "🚀 NASDAQ 100": [
         "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "GOOG", "TSLA", "AVGO", "NFLX",
         "COST", "AMD", "ADBE", "CSCO", "PEP", "QCOM", "INTC", "TXN", "CMCSA", "INTU",
-        "AMGN", "AMAT", "HON", "ISRG", "BKNG", "PANW", "ADP", "MU", "LRCX", "KLAC",
-        "REGN", "GILD", "VRTX", "SNPS", "CDNS", "MRVL", "PYPL", "CRWD", "ABNB", "FTNT",
-        "DXCM", "ADSK", "ORLY", "MELI", "CTAS", "NXPI", "WDAY", "TEAM", "LULU", "DASH",
-        "PCAR", "CPRT", "ROST", "KDP", "PAYX", "ODFL", "FAST", "CHTR", "EA", "CTSH",
-        "VRSK", "CEG", "BKR", "DDOG", "GEHC", "ILMN", "BIIB", "TTD", "IDXX", "ZS",
-        "CSGP", "ANSS", "WBD", "XEL", "FANG", "ON", "DLTR", "CDW", "MDB", "ZM",
-        "GFS", "MRNA", "ALGN", "SIRI", "WBA", "ENPH", "LCID", "RIVN", "SMCI", "ARM",
-        "COIN", "HOOD", "RBLX", "U", "AFRM", "SNOW", "PLTR", "DKNG", "ROKU", "PINS"
+        "AMGN", "AMAT", "HON", "ISRG", "BKNG", "PANW", "ADP", "MU", "LRCX", "KLAC"
     ],
     
     "📊 DOW 30": [
@@ -317,63 +253,16 @@ MARKETS = {
         "IBM", "AXP", "CAT", "GS", "HON", "BA", "TRV", "MMM", "WBA", "DOW"
     ],
     
-    "📈 RUSSELL 2000 (Top 200)": [
-        # Small Cap Growth
-        "CVNA", "RBLX", "PLUG", "SNDL", "HOOD", "SAVA", "AMC", "BYND", "LAZR", "SKLZ",
-        "SOFI", "OPEN", "WISH", "CLOV", "CLNE", "GOEV", "RIDE", "WKHS", "NKLA", "SPCE",
-        "DKNG", "PENN", "FUBO", "SONO", "ROKU", "PINS", "SNAP", "TWLO", "NET", "DDOG",
-        
-        # Fintech Small Caps
-        "CRWD", "ZS", "OKTA", "SNOW", "PLTR", "COIN", "AFRM", "U", "DASH", "ABNB",
-        "LYFT", "UBER", "DOCU", "BILL", "SQ", "SHOP", "SE", "MELI", "PYPL", "Z",
-        
-        # Biotech Small Caps
-        "MRNA", "NVAX", "VXRT", "INO", "SRNE", "OCGN", "CODX", "VBIV", "BNGO", "GEVO",
-        "SAVA", "BIIB", "SRNE", "GILD", "REGN", "VRTX", "BMRN", "ALNY", "IONS", "BLUE",
-        
-        # Energy Small Caps
-        "FCEL", "BE", "CLSK", "MARA", "RIOT", "HUT", "BITF", "SOS", "EBON", "CAN",
-        "DVN", "FANG", "MRO", "APA", "EOG", "OXY", "COP", "HAL", "SLB", "NOV",
-        
-        # Retail Small Caps
-        "GME", "BB", "NOK", "KOSS", "EXPR", "BBBY", "NAKD", "SNDL", "TLRY", "APHA",
-        "WOOF", "CHWY", "PTON", "ETSY", "W", "RH", "FIVE", "OLLI", "DKS", "DICK",
-        
-        # Industrial Small Caps
-        "BLNK", "CHPT", "EVGO", "QS", "FSR", "ARVL", "MULN", "AYRO", "SOLO", "ELMS",
-        "WKHS", "RIDE", "HYLN", "GOEV", "NKLA", "XL", "ACTC", "CLII", "CIIC", "DCRB",
-        
-        # Tech Small Caps
-        "CRSP", "NTLA", "EDIT", "BEAM", "VCYT", "PACB", "ILMN", "NVTA", "TWST", "FATE",
-        "BLUE", "RGEN", "LGVW", "ARKG", "GNOM", "HELX", "XBI", "IBB", "LABU", "LABD",
-        
-        # Consumer Small Caps
-        "BYND", "TTCF", "OTLY", "VFF", "CGC", "ACB", "CRON", "HEXO", "OGI", "APHA",
-        "TLRY", "CURLF", "GTBIF", "TCNNF", "CRLBF", "HRVSF", "TRUL", "MSOS", "MJ", "YOLO",
-        
-        # Misc Small Caps
-        "SPCE", "ASTR", "ASTS", "MNTS", "RKLB", "VACQ", "HOL", "SFTW", "DMYI", "AJAX",
-        "PSTH", "CCIV", "ACTC", "IPOE", "IPOF", "SOFI", "DKNG", "OPEN", "MPLN", "OUST"
+    "⚡ FUTURES": [
+        "ES=F", "NQ=F", "YM=F", "RTY=F",
+        "GC=F", "SI=F", "CL=F", "NG=F"
     ],
     
-    "⚡ FUTURES COMPLET": [
-        "ES=F", "NQ=F", "YM=F", "RTY=F",  # Indices
-        "GC=F", "SI=F", "HG=F", "PA=F", "PL=F",  # Métaux
-        "CL=F", "NG=F", "HO=F", "RB=F",  # Énergie
-        "ZB=F", "ZN=F", "ZF=F", "ZT=F",  # Bonds
-        "6E=F", "6J=F", "6B=F", "6C=F"  # Devises
-    ],
-    
-    "₿ CRYPTO TOP 50": [
+    "₿ CRYPTO TOP 20": [
         "BTC-USD", "ETH-USD", "BNB-USD", "SOL-USD", "XRP-USD", "ADA-USD",
         "AVAX-USD", "DOGE-USD", "DOT-USD", "MATIC-USD", "SHIB-USD", "LTC-USD",
         "UNI-USD", "LINK-USD", "ATOM-USD", "XLM-USD", "ALGO-USD", "VET-USD",
-        "ICP-USD", "FIL-USD", "HBAR-USD", "APT-USD", "ARB-USD", "OP-USD",
-        "NEAR-USD", "AAVE-USD", "GRT-USD", "SAND-USD", "MANA-USD", "AXS-USD",
-        "ETC-USD", "XMR-USD", "BCH-USD", "EOS-USD", "TRX-USD", "XTZ-USD",
-        "THETA-USD", "FTM-USD", "EGLD-USD", "RUNE-USD", "ZEC-USD", "DASH-USD",
-        "COMP-USD", "YFI-USD", "SNX-USD", "MKR-USD", "SUSHI-USD", "CRV-USD",
-        "BAT-USD", "ENJ-USD"
+        "ICP-USD", "FIL-USD"
     ],
     
     "🇨🇦 TSX TOP 30": [
@@ -384,27 +273,20 @@ MARKETS = {
     ],
     
     "🔋 AI & TECH": [
-        "NVDA", "AMD", "AVGO", "QCOM", "INTC", "TSM", "ASML", "AMAT", "LRCX", "KLAC",
-        "PLTR", "SNOW", "DDOG", "NET", "CRWD", "ZS", "PANW", "FTNT", "OKTA", "S",
-        "AI", "BBAI", "SOUN", "PATH", "UPST", "C3AI", "SMCI", "ARM", "IONQ", "RGTI"
+        "NVDA", "AMD", "AVGO", "QCOM", "INTC", "TSM", "AMAT", "LRCX",
+        "PLTR", "SNOW", "DDOG", "NET", "CRWD", "ZS", "PANW", "AI"
     ],
     
     "🏥 BIOTECH": [
-        "LLY", "JNJ", "ABBV", "MRK", "PFE", "TMO", "ABT", "BMY", "AMGN", "GILD",
-        "REGN", "VRTX", "ISRG", "BSX", "MDT", "SYK", "ZTS", "BIIB", "MRNA", "ILMN"
+        "LLY", "JNJ", "ABBV", "MRK", "PFE", "TMO", "ABT", "BMY",
+        "AMGN", "GILD", "REGN", "VRTX", "ISRG", "BSX", "MDT", "BIIB"
     ],
     
     "⚡ CLEAN ENERGY": [
-        "TSLA", "ENPH", "SEDG", "FSLR", "RUN", "PLUG", "BE", "BLNK", "CHPT", "NEE",
-        "FCEL", "CLSK", "QS", "FSR"
+        "TSLA", "ENPH", "SEDG", "FSLR", "RUN", "PLUG", "BE", "BLNK", "CHPT", "NEE"
     ],
     
-    "🎮 GAMING": [
-        "RBLX", "EA", "ATVI", "TTWO", "U", "GME", "DKNG", "PENN", "NFLX", "DIS"
-    ],
-    
-    "🌎 ALL MARKETS (AUTO-SCAN)": [
-        # Top 50 pour auto-scan rapide
+    "🌎 AUTO-SCAN MARKET": [
         "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "BRK-B", "LLY", "V",
         "AVGO", "WMT", "JPM", "MA", "XOM", "UNH", "ORCL", "HD", "COST", "PG",
         "JNJ", "NFLX", "BAC", "CRM", "AMD", "ABBV", "CVX", "MRK", "KO", "ADBE",
@@ -954,7 +836,7 @@ def scan_market_quantum(symbols, min_score=220, min_ai=75, show_progress=True):
 # ==================== AUTO-SCAN FUNCTION ====================
 def run_auto_scan():
     """Lance un auto-scan toutes les 30 minutes"""
-    symbols = MARKETS["🌎 ALL MARKETS (AUTO-SCAN)"]
+    symbols = MARKETS["🌎 AUTO-SCAN MARKET"]
     results = scan_market_quantum(symbols, min_score=240, min_ai=80, show_progress=False)
     
     if len(results) > 0:
@@ -1252,7 +1134,7 @@ with col1:
     st.markdown("# 🥓")
 with col2:
     st.markdown("# BACON TRADER PRO")
-    st.caption("⚡ QUANTUM ULTIMATE | ⭐ 80% Setup | 📱 Telegram | 🧪 Backtest | 🔄 AUTO-SCAN")
+    st.caption("⚡ QUANTUM ULTIMATE v4.2 | ⭐ 80% Setup | 📱 Telegram | 🧪 Backtest | 🔄 AUTO-SCAN")
 with col3:
     st.metric("Status", "LIVE 🔴")
 
@@ -1372,10 +1254,9 @@ with st.sidebar:
     st.success("✅ Backtest Engine")
     st.success("✅ Signal Tracker")
     st.success("✅ Auto-Scan (30min)")
-    st.success("✅ 503 S&P 500 Stocks")
     
     st.markdown("---")
-    st.caption("🥓 Bacon Trader Pro v4.1 ULTIMATE")
+    st.caption("🥓 Bacon Trader Pro v4.2 ULTIMATE")
     st.caption(f"⏰ {datetime.now().strftime('%H:%M:%S')}")
 
 # ==================== CHECK AUTO-SCAN ====================
@@ -1450,6 +1331,35 @@ with tab1:
             st.info("⏰ Markets closed or data unavailable")
     except:
         st.warning("⚠️ Quick scan unavailable")
+    
+    st.markdown("---")
+    
+    # DEBUG SECTION
+    st.subheader("🔧 DEBUG - Signal Tracker")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.write(f"**Active Signals:** {len(st.session_state.active_signals)}")
+        if len(st.session_state.active_signals) > 0:
+            for s in st.session_state.active_signals:
+                st.write(f"- {s['symbol']} ({s['tier']})")
+    
+    with col2:
+        st.write(f"**Closed Signals:** {len(st.session_state.closed_signals)}")
+    
+    with col3:
+        # Bouton de test
+        if st.button("🧪 TEST ADD SIGNAL", key="test_add_signal"):
+            test_added = add_signal_to_tracker(
+                "TEST", 100.0, 95.0, 105.0, 110.0, 115.0,
+                250, 85, "🥇 PLATINUM", "BULLISH", 55.0
+            )
+            if test_added:
+                st.success("✅ Test signal added!")
+                st.rerun()
+            else:
+                st.error("❌ Test failed - Already exists!")
 
 # TAB 2: PORTFOLIO DAY
 with tab2:
@@ -1561,7 +1471,7 @@ with tab4:
                 st.markdown(f"**Showing {len(filtered_results)} of {len(results)} signals**")
                 
                 # Affiche les résultats
-                st.dataframe(filtered_results, use_container_width=True, hide_index=True, height=500)
+                st.dataframe(filtered_results, use_container_width=True, hide_index=True, height=400)
                 
                 # Highlight DIAMOND et PLATINUM
                 diamond_signals = filtered_results[filtered_results['Tier'] == '💎 DIAMOND']
@@ -1599,60 +1509,23 @@ with tab4:
                 st.subheader("➕ TRACK SIGNALS")
                 st.caption("Click track button to add signals to Signal Tracker for automatic TP/SL monitoring")
                 
-                # BOUTON TRACK ALL
-                col1, col2 = st.columns([1, 4])
+                # BOUTON TRACK ALL - VERSION CORRIGÉE
+                col1, col2, col3 = st.columns([1, 1, 3])
+                
                 with col1:
-                    if st.button("🚀 TRACK ALL SIGNALS", type="primary", use_container_width=True, key="track_all_btn"):
+                    if st.button("🚀 TRACK ALL", type="primary", use_container_width=True, key="track_all_btn"):
                         added_count = 0
+                        skipped_count = 0
+                        
                         for idx, row in filtered_results.iterrows():
-                            added = add_signal_to_tracker(
-                                row['Symbol'],
-                                row['Entry'],
-                                row['Stop'],
-                                row['TP1'],
-                                row['TP2'],
-                                row['TP3'],
-                                row['Quantum'],
-                                row['AI'],
-                                row['Tier'],
-                                row['Flow'],
-                                row['RSI']
+                            # Vérifie si déjà tracké
+                            already_tracked = any(
+                                s['symbol'] == row['Symbol'] and s['status'] == 'ACTIVE' 
+                                for s in st.session_state.active_signals
                             )
-                            if added:
-                                added_count += 1
-                        
-                        if added_count > 0:
-                            st.success(f"✅ Added {added_count} signals to tracker!")
-                            update_signal_status()
-                            time.sleep(1)
-                            st.rerun()
-                        else:
-                            st.warning("⚠️ All signals are already being tracked!")
-                
-                with col2:
-                    st.info(f"📊 {len(filtered_results)} signals found - Track individual signals below or use TRACK ALL")
-                
-                st.markdown("---")
-                
-                # Boutons Track individuels
-                for idx, row in filtered_results.iterrows():
-                    col1, col2, col3 = st.columns([2, 6, 1])
-                    
-                    with col1:
-                        st.write(f"**{row['Tier']} {row['Symbol']}**")
-                    
-                    with col2:
-                        st.write(f"Entry: ${row['Entry']} | TP1: ${row['TP1']} | TP2: ${row['TP2']} | TP3: ${row['TP3']} | Stop: ${row['Stop']}")
-                    
-                    with col3:
-                        # Vérifie si déjà tracké
-                        already_tracked = any(s['symbol'] == row['Symbol'] and s['status'] == 'ACTIVE' for s in st.session_state.active_signals)
-                        
-                        if already_tracked:
-                            st.button("✅ TRACKED", key=f"track_{row['Symbol']}_{idx}", disabled=True, use_container_width=True)
-                        else:
-                            if st.button("➕ TRACK", key=f"track_{row['Symbol']}_{idx}", use_container_width=True, type="secondary"):
-                                added = add_signal_to_tracker(
+                            
+                            if not already_tracked:
+                                success = add_signal_to_tracker(
                                     row['Symbol'],
                                     row['Entry'],
                                     row['Stop'],
@@ -1665,13 +1538,131 @@ with tab4:
                                     row['Flow'],
                                     row['RSI']
                                 )
-                                if added:
-                                    st.success(f"✅ {row['Symbol']} added!")
+                                if success:
+                                    added_count += 1
+                            else:
+                                skipped_count += 1
+                        
+                        # Update et rerun
+                        if added_count > 0:
+                            update_signal_status()
+                            st.success(f"✅ Added {added_count} signals! (Skipped {skipped_count} already tracked)")
+                            time.sleep(1.5)
+                            st.rerun()
+                        elif skipped_count > 0:
+                            st.warning(f"⚠️ All {skipped_count} signals are already tracked!")
+                        else:
+                            st.info("No signals to track")
+                
+                with col2:
+                    # Bouton pour clear tous les signaux trackés
+                    if st.button("🗑️ CLEAR ALL", type="secondary", use_container_width=True, key="clear_tracked_btn"):
+                        if len(st.session_state.active_signals) > 0:
+                            st.session_state.active_signals = []
+                            st.success("✅ Cleared all tracked signals!")
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.info("No signals to clear")
+                
+                with col3:
+                    st.info(f"📊 {len(filtered_results)} signals | {len(st.session_state.active_signals)} tracked")
+                
+                st.markdown("---")
+                
+                # TABLE DES SIGNAUX AVEC STATUS
+                st.subheader("📋 SIGNAL LIST")
+                
+                # Prépare les données pour affichage
+                signal_display = []
+                
+                for idx, row in filtered_results.iterrows():
+                    # Check si déjà tracké
+                    is_tracked = any(
+                        s['symbol'] == row['Symbol'] and s['status'] == 'ACTIVE' 
+                        for s in st.session_state.active_signals
+                    )
+                    
+                    signal_display.append({
+                        'Status': '✅ TRACKED' if is_tracked else '⚪ NEW',
+                        'Tier': row['Tier'],
+                        'Symbol': row['Symbol'],
+                        'Quantum': f"{row['Quantum']:.0f}",
+                        'AI': f"{row['AI']:.0f}",
+                        'Entry': f"${row['Entry']}",
+                        'Stop': f"${row['Stop']}",
+                        'TP1': f"${row['TP1']}",
+                        'TP2': f"${row['TP2']}",
+                        'TP3': f"${row['TP3']}",
+                        'Flow': row['Flow'],
+                        'RSI': f"{row['RSI']:.1f}",
+                        'Whale': row['Whale'],
+                        '80%': row['80% Setup'],
+                        'Action': row['Recommendation']
+                    })
+                
+                if signal_display:
+                    st.dataframe(
+                        pd.DataFrame(signal_display), 
+                        use_container_width=True, 
+                        hide_index=True, 
+                        height=400
+                    )
+                    
+                    # TRACK INDIVIDUAL - VERSION SIMPLE
+                    st.markdown("---")
+                    st.subheader("➕ TRACK INDIVIDUAL SIGNALS")
+                    
+                    # Liste déroulante pour sélectionner un signal
+                    untracked_signals = []
+                    for idx, row in filtered_results.iterrows():
+                        is_tracked = any(
+                            s['symbol'] == row['Symbol'] and s['status'] == 'ACTIVE' 
+                            for s in st.session_state.active_signals
+                        )
+                        if not is_tracked:
+                            untracked_signals.append(row['Symbol'])
+                    
+                    if len(untracked_signals) > 0:
+                        col1, col2 = st.columns([2, 1])
+                        
+                        with col1:
+                            selected_symbol = st.selectbox(
+                                "Select a signal to track:",
+                                untracked_signals,
+                                key="select_individual_signal"
+                            )
+                        
+                        with col2:
+                            if st.button("➕ TRACK THIS", type="secondary", use_container_width=True, key="track_individual_btn"):
+                                # Trouve le signal sélectionné
+                                selected_row = filtered_results[filtered_results['Symbol'] == selected_symbol].iloc[0]
+                                
+                                success = add_signal_to_tracker(
+                                    selected_row['Symbol'],
+                                    selected_row['Entry'],
+                                    selected_row['Stop'],
+                                    selected_row['TP1'],
+                                    selected_row['TP2'],
+                                    selected_row['TP3'],
+                                    selected_row['Quantum'],
+                                    selected_row['AI'],
+                                    selected_row['Tier'],
+                                    selected_row['Flow'],
+                                    selected_row['RSI']
+                                )
+                                
+                                if success:
                                     update_signal_status()
-                                    time.sleep(0.5)
+                                    st.success(f"✅ {selected_symbol} tracked!")
+                                    time.sleep(1)
                                     st.rerun()
                                 else:
-                                    st.warning(f"⚠️ Already tracked!")
+                                    st.error(f"❌ Failed to track {selected_symbol}")
+                    else:
+                        st.info("✅ All signals are already tracked!")
+                else:
+                    st.warning("No signals to display")
             else:
                 st.info("📊 No signals found matching your criteria. Try lowering the thresholds!")
 
@@ -1883,127 +1874,4 @@ with tab7:
                 to_tp1 = ((signal['tp1'] / current_price) - 1) * 100
                 to_tp2 = ((signal['tp2'] / current_price) - 1) * 100
                 to_tp3 = ((signal['tp3'] / current_price) - 1) * 100
-                to_stop = ((signal['stop'] / current_price) - 1) * 100
-                
-                # Status emoji
-                if unrealized_pnl_pct > 5:
-                    status_emoji = '🟢'
-                elif unrealized_pnl_pct > 0:
-                    status_emoji = '🟡'
-                elif unrealized_pnl_pct > -2:
-                    status_emoji = '🟠'
-                else:
-                    status_emoji = '🔴'
-                
-                active_data.append({
-                    'Symbol': signal['symbol'],
-                    'Entry': f"${signal['entry_price']:.2f}",
-                    'Current': f"${current_price:.2f}",
-                    'Stop': f"${signal['stop']:.2f}",
-                    'TP1': f"${signal['tp1']:.2f}",
-                    'TP2': f"${signal['tp2']:.2f}",
-                    'TP3': f"${signal['tp3']:.2f}",
-                    'To TP1': f"{to_tp1:+.1f}%",
-                    'To Stop': f"{to_stop:.1f}%",
-                    'Unrealized P&L': f"${unrealized_pnl:+.2f}",
-                    'Unrealized %': f"{unrealized_pnl_pct:+.2f}%",
-                    'Status': status_emoji,
-                    'Entry Date': signal['entry_date'],
-                    'Tier': signal['tier']
-                })
-        
-        if active_data:
-            st.dataframe(pd.DataFrame(active_data), use_container_width=True, hide_index=True, height=400)
-        
-        st.markdown("---")
-        
-        # Boutons de gestion
-        st.subheader("🗑️ MANAGE ACTIVE SIGNALS")
-        
-        col1, col2 = st.columns([1, 3])
-        
-        with col1:
-            if st.button("🗑️ CLEAR ALL ACTIVE", type="primary", use_container_width=True, key="clear_all_active"):
-                if len(st.session_state.active_signals) > 0:
-                    # Ferme tous les signaux actifs
-                    for signal in st.session_state.active_signals:
-                        current_price = get_current_price(signal['symbol'])
-                        signal['exit_price'] = current_price
-                        signal['exit_reason'] = 'MANUAL CLOSE (ALL)'
-                        signal['exit_date'] = datetime.now().strftime('%Y-%m-%d %H:%M')
-                        signal['pnl'] = current_price - signal['entry_price']
-                        signal['pnl_pct'] = ((current_price / signal['entry_price']) - 1) * 100
-                        signal['status'] = 'CLOSED'
-                        st.session_state.closed_signals.append(signal)
-                    
-                    st.session_state.active_signals = []
-                    st.success("✅ All active signals closed!")
-                    time.sleep(1)
-                    st.rerun()
-        
-        with col2:
-            st.info(f"📊 {len(st.session_state.active_signals)} active signals - Close them individually below or use CLEAR ALL")
-        
-        st.markdown("---")
-        
-        # Boutons individuels
-        if len(st.session_state.active_signals) > 0:
-            cols = st.columns(min(len(st.session_state.active_signals), 5))
-            for idx, signal in enumerate(st.session_state.active_signals):
-                col_idx = idx % 5
-                with cols[col_idx]:
-                    if st.button(f"❌ {signal['symbol']}", key=f"close_signal_{idx}", use_container_width=True):
-                        current_price = get_current_price(signal['symbol'])
-                        signal['exit_price'] = current_price
-                        signal['exit_reason'] = 'MANUAL CLOSE'
-                        signal['exit_date'] = datetime.now().strftime('%Y-%m-%d %H:%M')
-                        signal['pnl'] = current_price - signal['entry_price']
-                        signal['pnl_pct'] = ((current_price / signal['entry_price']) - 1) * 100
-                        signal['status'] = 'CLOSED'
-                        st.session_state.closed_signals.append(signal)
-                        st.session_state.active_signals.pop(idx)
-                        st.rerun()
-    else:
-        st.info("📝 No active signals. Scan the market to find signals!")
-        st.write("**How to add signals:**")
-        st.write("1. Go to 'Quantum Scanner' tab")
-        st.write("2. Run a scan")
-        st.write("3. Click '➕ TRACK' on any signal you want to monitor")
-    
-    st.markdown("---")
-    
-    # Closed Signals
-    st.subheader("📋 CLOSED SIGNALS - Trade History")
-    
-    if len(st.session_state.closed_signals) > 0:
-        closed_data = []
-        
-        for signal in st.session_state.closed_signals:
-            closed_data.append({
-                'Symbol': signal['symbol'],
-                'Entry': f"${signal['entry_price']:.2f}",
-                'Exit': f"${signal['exit_price']:.2f}",
-                'Exit Reason': signal['exit_reason'],
-                'P&L': f"${signal['pnl']:+.2f}",
-                'P&L %': f"{signal['pnl_pct']:+.2f}%",
-                'Result': '✅ WIN' if signal['pnl'] > 0 else '❌ LOSS',
-                'Entry Date': signal['entry_date'],
-                'Exit Date': signal['exit_date'],
-                'Tier': signal['tier']
-            })
-        
-        st.dataframe(pd.DataFrame(closed_data), use_container_width=True, hide_index=True, height=400)
-        
-        # Clear history
-        if st.button("🗑️ CLEAR HISTORY", type="secondary"):
-            st.session_state.closed_signals = []
-            st.rerun()
-    else:
-        st.info("No closed signals yet")
-
-# ==================== FOOTER ====================
-st.markdown("---")
-st.caption("🥓 Bacon Trader Pro - QUANTUM ULTIMATE EDITION v4.1")
-st.caption("⚡ Order Flow | 📊 Volume Profile | 🌊 Elliott Wave | 📐 SMC | ⭐ 80% Setup | 🔄 Auto-Scan")
-st.caption(f"🕐 Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-
+                to_stop
