@@ -19,7 +19,7 @@ st.set_page_config(
 )
 
 # ==================== TELEGRAM CONFIG ====================
-TELEGRAM_TOKEN = st.secrets.get("TELEGRAM_TOKEN", "8414444384:AAFlblBgToY7ew50ufZTmNd5qJGRid-TtVA")
+TELEGRAM_TOKEN = st.secrets.get("TELEGRAM_TOKEN", "8144444384:AAFlblBgToY7ew50ufZTmNd5qJGRid-TtVA")
 CHAT_ID = st.secrets.get("CHAT_ID", "813100618")
 
 def send_telegram_alert(message):
@@ -67,19 +67,26 @@ if 'auto_scan_results' not in st.session_state:
 # ==================== SIGNAL TRACKER FUNCTIONS ====================
 def add_signal_to_tracker(symbol, entry, stop, tp1, tp2, tp3, quantum_score, ai_score, tier, flow, rsi):
     """Ajoute un signal au tracker"""
+    
+    # Vérifie si le signal existe déjà (ACTIVE seulement)
+    exists = any(s['symbol'] == symbol and s['status'] == 'ACTIVE' for s in st.session_state.active_signals)
+    
+    if exists:
+        return False
+    
     signal = {
         'symbol': symbol,
-        'entry_price': entry,
+        'entry_price': float(entry),
         'entry_date': datetime.now().strftime('%Y-%m-%d %H:%M'),
-        'stop': stop,
-        'tp1': tp1,
-        'tp2': tp2,
-        'tp3': tp3,
-        'quantum_score': quantum_score,
-        'ai_score': ai_score,
+        'stop': float(stop),
+        'tp1': float(tp1),
+        'tp2': float(tp2),
+        'tp3': float(tp3),
+        'quantum_score': float(quantum_score),
+        'ai_score': float(ai_score),
         'tier': tier,
         'flow': flow,
-        'rsi': rsi,
+        'rsi': float(rsi),
         'status': 'ACTIVE',
         'exit_price': None,
         'exit_reason': None,
@@ -88,12 +95,30 @@ def add_signal_to_tracker(symbol, entry, stop, tp1, tp2, tp3, quantum_score, ai_
         'pnl_pct': 0
     }
     
-    exists = any(s['symbol'] == symbol and s['status'] == 'ACTIVE' for s in st.session_state.active_signals)
+    st.session_state.active_signals.append(signal)
     
-    if not exists:
-        st.session_state.active_signals.append(signal)
-        return True
-    return False
+    # Envoie notification Telegram
+    if st.session_state.telegram_enabled and tier in ['💎 DIAMOND', '🥇 PLATINUM']:
+        msg = f"""
+🥓 <b>SIGNAL TRACKED!</b>
+
+{tier} <b>{symbol}</b>
+
+📊 Quantum: {quantum_score:.0f}/300
+🤖 AI: {ai_score:.0f}/100
+
+💰 Entry: ${entry:.2f}
+🛑 Stop: ${stop:.2f}
+🎯 TP1: ${tp1:.2f} | TP2: ${tp2:.2f} | TP3: ${tp3:.2f}
+
+📈 Flow: {flow}
+📊 RSI: {rsi:.1f}
+
+⚡ Now tracking automatically!
+        """
+        send_telegram_alert(msg)
+    
+    return True
 
 def update_signal_status():
     """Update le statut de tous les signaux actifs"""
@@ -328,7 +353,7 @@ MARKETS = {
         
         # Misc Small Caps
         "SPCE", "ASTR", "ASTS", "MNTS", "RKLB", "VACQ", "HOL", "SFTW", "DMYI", "AJAX",
-        "PSTH", "CCIV", "ACTC", "IPOE", "IPOF", "SoFi", "DKNG", "OPEN", "MPLN", "OUST"
+        "PSTH", "CCIV", "ACTC", "IPOE", "IPOF", "SOFI", "DKNG", "OPEN", "MPLN", "OUST"
     ],
     
     "⚡ FUTURES COMPLET": [
@@ -1314,6 +1339,21 @@ with st.sidebar:
     
     st.markdown("---")
     
+    st.subheader("📊 SIGNAL TRACKER")
+    active_count = len(st.session_state.active_signals)
+    closed_count = len(st.session_state.closed_signals)
+    
+    st.metric("Active Signals", active_count)
+    st.metric("Closed Trades", closed_count)
+    
+    if closed_count > 0:
+        closed_df = pd.DataFrame(st.session_state.closed_signals)
+        wins = len(closed_df[closed_df['pnl'] > 0])
+        win_rate = (wins / closed_count) * 100
+        st.metric("Win Rate", f"{win_rate:.1f}%")
+    
+    st.markdown("---")
+    
     st.subheader("🎯 QUANTUM SETTINGS")
     min_quantum = st.slider("Min Quantum Score", 0, 300, 220, 10, key="slider_min_quantum")
     min_ai = st.slider("Min AI Score", 0, 100, 75, 5, key="slider_min_ai")
@@ -1335,7 +1375,7 @@ with st.sidebar:
     st.success("✅ 503 S&P 500 Stocks")
     
     st.markdown("---")
-    st.caption("🥓 Bacon Trader Pro v4.0 ULTIMATE")
+    st.caption("🥓 Bacon Trader Pro v4.1 ULTIMATE")
     st.caption(f"⏰ {datetime.now().strftime('%H:%M:%S')}")
 
 # ==================== CHECK AUTO-SCAN ====================
@@ -1465,7 +1505,8 @@ with tab4:
         st.subheader("⚙️ Configuration")
         market = st.selectbox("Select Market", list(MARKETS.keys()), key="scanner_market")
         
-        show_80_only = st.checkbox("⭐ Show only 80% Setups", key="scanner_checkbox_80")
+        show_80_only = st.checkbox("⭐ Show only 80% Setups", key="scanner_checkbox
+_80")
         
         scan_button = st.button("🚀 QUANTUM SCAN", type="primary", use_container_width=True, key="btn_quantum_scan")
     
@@ -1476,17 +1517,56 @@ with tab4:
             symbols = MARKETS[market]
             
             with st.spinner(f"Quantum scanning {len(symbols)} symbols..."):
-                   results = scan_market_quantum(symbols, min_quantum, min_ai, show_progress=True)
+                results = scan_market_quantum(symbols, min_quantum, min_ai, show_progress=True)
             
             if len(results) > 0:
+                if show_80_only:
+                    results = results[results['80% Setup'] == '⭐']
+                
                 st.success(f"✅ Found {len(results)} signals!")
                 
+                # Filtres
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    filter_tier = st.multiselect(
+                        "Filter by Tier",
+                        ["💎 DIAMOND", "🥇 PLATINUM", "🥈 GOLD", "🥉 SILVER", "🔸 BRONZE"],
+                        default=["💎 DIAMOND", "🥇 PLATINUM"],
+                        key="filter_tier"
+                    )
+                
+                with col2:
+                    filter_flow = st.multiselect(
+                        "Filter by Flow",
+                        ["BULLISH", "NEUTRAL", "BEARISH"],
+                        default=["BULLISH"],
+                        key="filter_flow"
+                    )
+                
+                with col3:
+                    show_whale_only = st.checkbox("🐋 Show Whales Only", key="filter_whale")
+                
+                # Applique les filtres
+                filtered_results = results.copy()
+                
+                if filter_tier:
+                    filtered_results = filtered_results[filtered_results['Tier'].isin(filter_tier)]
+                
+                if filter_flow:
+                    filtered_results = filtered_results[filtered_results['Flow'].isin(filter_flow)]
+                
+                if show_whale_only:
+                    filtered_results = filtered_results[filtered_results['Whale'] == '🐋']
+                
+                st.markdown(f"**Showing {len(filtered_results)} of {len(results)} signals**")
+                
                 # Affiche les résultats
-                st.dataframe(results, use_container_width=True, hide_index=True, height=500)
+                st.dataframe(filtered_results, use_container_width=True, hide_index=True, height=500)
                 
                 # Highlight DIAMOND et PLATINUM
-                diamond_signals = results[results['Tier'] == '💎 DIAMOND']
-                platinum_signals = results[results['Tier'] == '🥇 PLATINUM']
+                diamond_signals = filtered_results[filtered_results['Tier'] == '💎 DIAMOND']
+                platinum_signals = filtered_results[filtered_results['Tier'] == '🥇 PLATINUM']
                 
                 if len(diamond_signals) > 0:
                     st.markdown("### 💎 DIAMOND SIGNALS")
@@ -1520,18 +1600,12 @@ with tab4:
                 st.subheader("➕ TRACK SIGNALS")
                 st.caption("Click track button to add signals to Signal Tracker for automatic TP/SL monitoring")
                 
-                # Boutons Track
-                for idx, row in results.iterrows():
-                    col1, col2, col3 = st.columns([2, 6, 1])
-                    
-                    with col1:
-                        st.write(f"**{row['Tier']} {row['Symbol']}**")
-                    
-                    with col2:
-                        st.write(f"Entry: ${row['Entry']} | TP1: ${row['TP1']} | TP2: ${row['TP2']} | TP3: ${row['TP3']} | Stop: ${row['Stop']}")
-                    
-                    with col3:
-                        if st.button("➕ TRACK", key=f"track_{row['Symbol']}_{idx}"):
+                # BOUTON TRACK ALL
+                col1, col2 = st.columns([1, 4])
+                with col1:
+                    if st.button("🚀 TRACK ALL SIGNALS", type="primary", use_container_width=True, key="track_all_btn"):
+                        added_count = 0
+                        for idx, row in filtered_results.iterrows():
                             added = add_signal_to_tracker(
                                 row['Symbol'],
                                 row['Entry'],
@@ -1546,11 +1620,59 @@ with tab4:
                                 row['RSI']
                             )
                             if added:
-                                st.success(f"✅ {row['Symbol']} added to Signal Tracker!")
-                                # Update signal status immédiatement
-                                update_signal_status()
-                            else:
-                                st.warning(f"⚠️ {row['Symbol']} already being tracked!")
+                                added_count += 1
+                        
+                        if added_count > 0:
+                            st.success(f"✅ Added {added_count} signals to tracker!")
+                            update_signal_status()
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ All signals are already being tracked!")
+                
+                with col2:
+                    st.info(f"📊 {len(filtered_results)} signals found - Track individual signals below or use TRACK ALL")
+                
+                st.markdown("---")
+                
+                # Boutons Track individuels
+                for idx, row in filtered_results.iterrows():
+                    col1, col2, col3 = st.columns([2, 6, 1])
+                    
+                    with col1:
+                        st.write(f"**{row['Tier']} {row['Symbol']}**")
+                    
+                    with col2:
+                        st.write(f"Entry: ${row['Entry']} | TP1: ${row['TP1']} | TP2: ${row['TP2']} | TP3: ${row['TP3']} | Stop: ${row['Stop']}")
+                    
+                    with col3:
+                        # Vérifie si déjà tracké
+                        already_tracked = any(s['symbol'] == row['Symbol'] and s['status'] == 'ACTIVE' for s in st.session_state.active_signals)
+                        
+                        if already_tracked:
+                            st.button("✅ TRACKED", key=f"track_{row['Symbol']}_{idx}", disabled=True, use_container_width=True)
+                        else:
+                            if st.button("➕ TRACK", key=f"track_{row['Symbol']}_{idx}", use_container_width=True, type="secondary"):
+                                added = add_signal_to_tracker(
+                                    row['Symbol'],
+                                    row['Entry'],
+                                    row['Stop'],
+                                    row['TP1'],
+                                    row['TP2'],
+                                    row['TP3'],
+                                    row['Quantum'],
+                                    row['AI'],
+                                    row['Tier'],
+                                    row['Flow'],
+                                    row['RSI']
+                                )
+                                if added:
+                                    st.success(f"✅ {row['Symbol']} added!")
+                                    update_signal_status()
+                                    time.sleep(0.5)
+                                    st.rerun()
+                                else:
+                                    st.warning(f"⚠️ Already tracked!")
             else:
                 st.info("📊 No signals found matching your criteria. Try lowering the thresholds!")
 
@@ -1799,21 +1921,49 @@ with tab7:
         # Boutons de gestion
         st.subheader("🗑️ MANAGE ACTIVE SIGNALS")
         
-        cols = st.columns(min(len(st.session_state.active_signals), 5))
-        for idx, signal in enumerate(st.session_state.active_signals):
-            col_idx = idx % 5
-            with cols[col_idx]:
-                if st.button(f"❌ Close {signal['symbol']}", key=f"close_signal_{idx}"):
-                    current_price = get_current_price(signal['symbol'])
-                    signal['exit_price'] = current_price
-                    signal['exit_reason'] = 'MANUAL CLOSE'
-                    signal['exit_date'] = datetime.now().strftime('%Y-%m-%d %H:%M')
-                    signal['pnl'] = current_price - signal['entry_price']
-                    signal['pnl_pct'] = ((current_price / signal['entry_price']) - 1) * 100
-                    signal['status'] = 'CLOSED'
-                    st.session_state.closed_signals.append(signal)
-                    st.session_state.active_signals.pop(idx)
+        col1, col2 = st.columns([1, 3])
+        
+        with col1:
+            if st.button("🗑️ CLEAR ALL ACTIVE", type="primary", use_container_width=True, key="clear_all_active"):
+                if len(st.session_state.active_signals) > 0:
+                    # Ferme tous les signaux actifs
+                    for signal in st.session_state.active_signals:
+                        current_price = get_current_price(signal['symbol'])
+                        signal['exit_price'] = current_price
+                        signal['exit_reason'] = 'MANUAL CLOSE (ALL)'
+                        signal['exit_date'] = datetime.now().strftime('%Y-%m-%d %H:%M')
+                        signal['pnl'] = current_price - signal['entry_price']
+                        signal['pnl_pct'] = ((current_price / signal['entry_price']) - 1) * 100
+                        signal['status'] = 'CLOSED'
+                        st.session_state.closed_signals.append(signal)
+                    
+                    st.session_state.active_signals = []
+                    st.success("✅ All active signals closed!")
+                    time.sleep(1)
                     st.rerun()
+        
+        with col2:
+            st.info(f"📊 {len(st.session_state.active_signals)} active signals - Close them individually below or use CLEAR ALL")
+        
+        st.markdown("---")
+        
+        # Boutons individuels
+        if len(st.session_state.active_signals) > 0:
+            cols = st.columns(min(len(st.session_state.active_signals), 5))
+            for idx, signal in enumerate(st.session_state.active_signals):
+                col_idx = idx % 5
+                with cols[col_idx]:
+                    if st.button(f"❌ {signal['symbol']}", key=f"close_signal_{idx}", use_container_width=True):
+                        current_price = get_current_price(signal['symbol'])
+                        signal['exit_price'] = current_price
+                        signal['exit_reason'] = 'MANUAL CLOSE'
+                        signal['exit_date'] = datetime.now().strftime('%Y-%m-%d %H:%M')
+                        signal['pnl'] = current_price - signal['entry_price']
+                        signal['pnl_pct'] = ((current_price / signal['entry_price']) - 1) * 100
+                        signal['status'] = 'CLOSED'
+                        st.session_state.closed_signals.append(signal)
+                        st.session_state.active_signals.pop(idx)
+                        st.rerun()
     else:
         st.info("📝 No active signals. Scan the market to find signals!")
         st.write("**How to add signals:**")
@@ -1854,7 +2004,7 @@ with tab7:
 
 # ==================== FOOTER ====================
 st.markdown("---")
-st.caption("🥓 Bacon Trader Pro - QUANTUM ULTIMATE EDITION v4.0")
+st.caption("🥓 Bacon Trader Pro - QUANTUM ULTIMATE EDITION v4.1")
 st.caption("⚡ Order Flow | 📊 Volume Profile | 🌊 Elliott Wave | 📐 SMC | ⭐ 80% Setup | 🔄 Auto-Scan")
 st.caption(f"🕐 Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
