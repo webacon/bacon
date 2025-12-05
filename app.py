@@ -78,10 +78,8 @@ if 'last_update' not in st.session_state:
 
 # ==================== SIGNAL TRACKER FUNCTIONS ====================
 def add_signal_to_tracker(symbol, entry, stop, tp1, tp2, tp3, quantum_score, ai_score, tier, flow, rsi):
-    """Ajoute un signal au tracker - Version améliorée"""
-    
+    """Ajoute un signal au tracker"""
     try:
-        # Vérifie si le signal existe déjà (ACTIVE seulement)
         exists = any(s['symbol'] == symbol and s['status'] == 'ACTIVE' for s in st.session_state.active_signals)
         
         if exists:
@@ -110,7 +108,6 @@ def add_signal_to_tracker(symbol, entry, stop, tp1, tp2, tp3, quantum_score, ai_
         
         st.session_state.active_signals.append(signal)
         
-        # Envoie notification Telegram pour Diamond/Platinum
         if st.session_state.telegram_enabled and tier in ['💎 DIAMOND', '🥇 PLATINUM']:
             msg = f"""
 🥓 <b>SIGNAL TRACKED!</b>
@@ -134,7 +131,6 @@ def add_signal_to_tracker(symbol, entry, stop, tp1, tp2, tp3, quantum_score, ai_
         return True
         
     except Exception as e:
-        st.error(f"❌ Error adding signal: {e}")
         return False
 
 def update_signal_status():
@@ -217,7 +213,7 @@ def get_live_data(symbol, period="1mo", interval="1d"):
     except:
         return None
 
-# ==================== MARCHÉS ====================
+# ==================== MARCHÉS - LISTES COMPLÈTES ====================
 MARKETS = {
     "🔥 TOP 10 US": [
         "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", 
@@ -232,23 +228,69 @@ MARKETS = {
         "WFC", "DHR", "VZ", "TXN", "PM", "QCOM", "NEE", "IBM", "HON", "UNP"
     ],
     
-    "🇺🇸 DOW 30": [
-        "AAPL", "MSFT", "AMZN", "UNH", "JNJ", "V", "JPM", "WMT", "PG", "HD",
-        "CVX", "MRK", "DIS", "CSCO", "NKE", "MCD", "VZ", "INTC", "KO", "CRM",
-        "IBM", "AXP", "CAT", "GS", "HON", "BA", "TRV", "MMM", "WBA", "DOW"
+    "🇺🇸 DOW 30 COMPLET": [
+        "AAPL", "MSFT", "NVDA", "AMZN", "WMT", "JPM", "V", "JNJ", "HD", "PG",
+        "UNH", "CSCO", "CVX", "KO", "IBM", "CAT", "GS", "MRK", "AXP", "CRM",
+        "MCD", "DIS", "AMGN", "VZ", "BA", "HON", "NKE", "MMM", "SHW", "TRV",
+        "RTX", "PFE", "DOW", "WBA"
     ],
     
-    "₿ CRYPTO TOP 20": [
+    "💼 S&P 100": [
+        "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "GOOG", "META", "TSLA", "BRK-B", "LLY",
+        "V", "AVGO", "WMT", "JPM", "MA", "XOM", "UNH", "ORCL", "HD", "COST",
+        "PG", "JNJ", "NFLX", "BAC", "CRM", "AMD", "ABBV", "CVX", "MRK", "KO",
+        "ADBE", "PEP", "TMO", "ACN", "CSCO", "LIN", "MCD", "ABT", "INTC", "DIS",
+        "CMCSA", "WFC", "DHR", "VZ", "TXN", "PM", "QCOM", "NEE", "IBM", "HON",
+        "UNP", "INTU", "CAT", "GS", "LOW", "SPGI", "AXP", "BLK", "BA", "SBUX",
+        "RTX", "BKNG", "AMAT", "GILD", "ELV", "SYK", "PLD", "ADP", "MDLZ", "VRTX",
+        "ADI", "CI", "TJX", "REGN", "MMC", "LRCX", "CB", "SO", "PGR", "SCHW",
+        "C", "DE", "BMY", "AMT", "NOW", "ISRG", "PANW", "BX", "FI", "ETN",
+        "MU", "ZTS", "BSX", "SLB", "USB", "DUK", "MCK", "PH", "EOG", "KLAC"
+    ],
+    
+    "₿ CRYPTO TOP 30 COMPLET": [
         "BTC-USD", "ETH-USD", "BNB-USD", "SOL-USD", "XRP-USD", "ADA-USD",
         "AVAX-USD", "DOGE-USD", "DOT-USD", "MATIC-USD", "SHIB-USD", "LTC-USD",
         "UNI-USD", "LINK-USD", "ATOM-USD", "XLM-USD", "ALGO-USD", "VET-USD",
-        "ICP-USD", "FIL-USD"
+        "ICP-USD", "FIL-USD", "HBAR-USD", "APT-USD", "OP-USD", "ARB-USD",
+        "NEAR-USD", "STX-USD", "IMX-USD", "INJ-USD", "TIA-USD", "RUNE-USD"
     ],
     
-    "🇨🇦 TSX TOP 20": [
+    "🇨🇦 TSX TOP 30 COMPLET": [
         "RY.TO", "TD.TO", "ENB.TO", "BNS.TO", "CNR.TO", "BMO.TO", "CNQ.TO", "CP.TO",
         "SU.TO", "BCE.TO", "CM.TO", "TRP.TO", "ABX.TO", "MFC.TO", "SLF.TO", "FNV.TO",
-        "NTR.TO", "WCN.TO", "BAM.TO", "QSR.TO"
+        "NTR.TO", "WCN.TO", "BAM.TO", "QSR.TO", "SHOP.TO", "TRI.TO", "WN.TO", "ATD.TO",
+        "L.TO", "NA.TO", "MG.TO", "CCL-B.TO", "AEM.TO", "DOL.TO"
+    ],
+    
+    "🏦 FINANCE US": [
+        "JPM", "BAC", "WFC", "C", "GS", "MS", "BLK", "SCHW", "AXP", "USB",
+        "PNC", "TFC", "BK", "COF", "CME", "ICE", "SPGI", "MCO", "AIG", "MET"
+    ],
+    
+    "⚡ TECH US": [
+        "AAPL", "MSFT", "NVDA", "GOOGL", "META", "TSLA", "AVGO", "ORCL", "ADBE", "CRM",
+        "CSCO", "ACN", "INTC", "AMD", "NOW", "QCOM", "AMAT", "ADI", "LRCX", "INTU"
+    ],
+    
+    "🏥 SANTÉ US": [
+        "LLY", "UNH", "JNJ", "ABBV", "MRK", "TMO", "ABT", "DHR", "PFE", "BMY",
+        "AMGN", "GILD", "VRTX", "ELV", "CI", "CVS", "MCK", "BSX", "ISRG", "SYK"
+    ],
+    
+    "⚙️ INDUSTRIELS US": [
+        "CAT", "HON", "BA", "RTX", "UNP", "DE", "GE", "MMM", "LMT", "NOC",
+        "EMR", "ETN", "FDX", "UPS", "WM", "NSC", "ITW", "CSX", "PH", "CMI"
+    ],
+    
+    "🛒 CONSOMMATION US": [
+        "AMZN", "WMT", "COST", "HD", "MCD", "SBUX", "NKE", "TJX", "LOW", "TGT",
+        "DIS", "BKNG", "ORLY", "AZO", "MAR", "YUM", "CMG", "ROST", "DG", "DLTR"
+    ],
+    
+    "⚡ ÉNERGIE US": [
+        "XOM", "CVX", "COP", "SLB", "EOG", "PXD", "MPC", "PSX", "VLO", "OXY",
+        "WMB", "KMI", "HAL", "BKR", "FANG", "DVN", "HES", "APA", "MRO", "CTRA"
     ]
 }
 
@@ -1110,7 +1152,7 @@ if current_time - st.session_state.last_update > 30:
     update_signal_status()
     st.session_state.last_update = current_time
 
-# ==================== SIDEBAR ====================
+# ==================== SIDEBAR - FIXED ====================
 with st.sidebar:
     st.header("⚙️ QUANTUM CONTROL")
     
@@ -1138,12 +1180,12 @@ with st.sidebar:
                 st.info(f"Next scan in {int(time_until/60)} min")
             else:
                 st.warning("Scan en attente...")
-                if st.button("🚀 FORCE SCAN NOW"):
+                if st.button("🚀 FORCE SCAN NOW", key="btn_force_scan"):
                     with st.spinner("Auto-scanning..."):
                         run_auto_scan()
                     st.rerun()
         else:
-            if st.button("🚀 START AUTO-SCAN"):
+            if st.button("🚀 START AUTO-SCAN", key="btn_start_autoscan"):
                 with st.spinner("Running first scan..."):
                     run_auto_scan()
                 st.rerun()
@@ -1152,44 +1194,53 @@ with st.sidebar:
     
     st.markdown("---")
     
+    # ==================== DAY TRADING - FIXED ====================
     day_stats = calculate_portfolio_stats('day')
     st.subheader("💰 DAY TRADING")
     st.metric("Value", f"${day_stats['total_value']:,.2f}")
     st.metric("P&L", f"${day_stats['total_pnl']:+,.2f}", f"{day_stats['total_pnl_pct']:+.2f}%")
     
-    with st.expander("➕ ADD DAY POSITION"):
-        with st.form("add_day_pos", clear_on_submit=True):
-            day_symbol = st.text_input("Symbol", "", key="input_day_symbol").upper()
-            day_qty = st.number_input("Quantity", min_value=1, value=10, key="input_day_qty")
-            day_entry = st.number_input("Entry Price", min_value=0.01, value=100.00, step=0.01, key="input_day_entry")
-            day_submit = st.form_submit_button("Add Position", use_container_width=True)
-            
-            if day_submit and day_symbol:
-                add_day_position(day_symbol, day_qty, day_entry)
-                st.success(f"✅ Added {day_qty} {day_symbol} @ ${day_entry}")
-                st.rerun()
+    st.markdown("**➕ Add Day Position:**")
+    
+    day_symbol = st.text_input("Symbol", "", key="input_day_symbol", placeholder="AAPL").upper()
+    day_qty = st.number_input("Quantity", min_value=1, value=10, key="input_day_qty")
+    day_entry = st.number_input("Entry Price", min_value=0.01, value=100.00, step=0.01, key="input_day_entry")
+    
+    if st.button("➕ Add Day Position", use_container_width=True, key="btn_add_day"):
+        if day_symbol and len(day_symbol) > 0:
+            add_day_position(day_symbol, day_qty, day_entry)
+            st.success(f"✅ Added {day_qty} {day_symbol} @ ${day_entry}")
+            time.sleep(0.5)
+            st.rerun()
+        else:
+            st.error("❌ Enter a symbol!")
     
     st.markdown("---")
     
+    # ==================== LONG-TERM - FIXED ====================
     lt_stats = calculate_portfolio_stats('long')
     st.subheader("📊 LONG-TERM (CÉLI)")
     st.metric("Value", f"${lt_stats['total_value']:,.2f}")
     st.metric("P&L", f"${lt_stats['total_pnl']:+,.2f}", f"{lt_stats['total_pnl_pct']:+.2f}%")
     
-    with st.expander("➕ ADD LONG POSITION"):
-        with st.form("add_long_pos", clear_on_submit=True):
-            lt_symbol = st.text_input("Symbol", "", key="input_lt_symbol").upper()
-            lt_qty = st.number_input("Quantity", min_value=1, value=50, key="input_lt_qty")
-            lt_entry = st.number_input("Entry Price", min_value=0.01, value=150.00, step=0.01, key="input_lt_entry")
-            lt_submit = st.form_submit_button("Add Position", use_container_width=True)
-            
-            if lt_submit and lt_symbol:
-                add_long_position(lt_symbol, lt_qty, lt_entry)
-                st.success(f"✅ Added {lt_qty} {lt_symbol} @ ${lt_entry}")
-                st.rerun()
+    st.markdown("**➕ Add Long Position:**")
+    
+    lt_symbol = st.text_input("Symbol", "", key="input_lt_symbol", placeholder="MSFT").upper()
+    lt_qty = st.number_input("Quantity", min_value=1, value=50, key="input_lt_qty")
+    lt_entry = st.number_input("Entry Price", min_value=0.01, value=150.00, step=0.01, key="input_lt_entry")
+    
+    if st.button("➕ Add Long Position", use_container_width=True, key="btn_add_long"):
+        if lt_symbol and len(lt_symbol) > 0:
+            add_long_position(lt_symbol, lt_qty, lt_entry)
+            st.success(f"✅ Added {lt_qty} {lt_symbol} @ ${lt_entry}")
+            time.sleep(0.5)
+            st.rerun()
+        else:
+            st.error("❌ Enter a symbol!")
     
     st.markdown("---")
     
+    # ==================== SIGNAL TRACKER STATS ====================
     st.subheader("📊 SIGNAL TRACKER")
     active_count = len(st.session_state.active_signals)
     closed_count = len(st.session_state.closed_signals)
@@ -1205,6 +1256,7 @@ with st.sidebar:
     
     st.markdown("---")
     
+    # ==================== QUANTUM SETTINGS ====================
     st.subheader("🎯 QUANTUM SETTINGS")
     min_quantum = st.slider("Min Quantum Score", 0, 300, 180, 10, key="slider_min_quantum")
     min_ai = st.slider("Min AI Score", 0, 100, 60, 5, key="slider_min_ai")
@@ -1213,6 +1265,7 @@ with st.sidebar:
     
     st.markdown("---")
     
+    # ==================== FEATURES ====================
     st.subheader("🔬 FEATURES ACTIVE")
     st.success("✅ Order Flow (ATAS)")
     st.success("✅ Volume Profile")
@@ -1778,6 +1831,23 @@ with tab6:
             st.error("❌ Backtest failed. Not enough data or invalid symbol.")
 
 # TAB 7: SIGNAL TRACKER
+with tab7:
+    st.header("📊 SIGNAL TRACKER")
+    
+    update_signal_status()
+    
+    if st.button("🔄 REFRESH SIGNALS", use_container_width=True, key="btn_refresh_signals"):
+        update_signal_status()
+        st.success("✅ Signals updated!")
+        st.rerun()
+    
+    st.markdown("---")
+    
+    tab_active, tab_closed = st.tabs(["🟢 Active Signals", "📝 Closed Trades"])
+    
+    with tab_active:
+        if len(st.session_state.active
+# TAB 7: SIGNAL TRACKER (SUITE)
 with tab7:
     st.header("📊 SIGNAL TRACKER")
     
