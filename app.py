@@ -1467,39 +1467,92 @@ with tab4:
             
             st.subheader("📊 Individual Signal Actions")
             
-            for idx, row in results.iterrows():
-                with st.expander(f"{row['Tier']} {row['Symbol']} | Q:{row['Quantum']:.0f} AI:{row['AI']:.0f}"):
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        st.metric("Entry", f"${row['Entry']:.2f}")
-                        st.metric("Stop", f"${row['Stop']:.2f}")
-                    
-                    with col2:
-                        st.metric("TP1", f"${row['TP1']:.2f}")
-                        st.metric("TP2", f"${row['TP2']:.2f}")
-                    
-                    with col3:
-                        st.metric("TP3", f"${row['TP3']:.2f}")
-                        st.metric("RSI", f"{row['RSI']:.1f}")
-                    
-                    st.write(f"📈 Flow: {row['Flow']}")
-                    st.write(f"💡 Recommendation: {row['Recommendation']}")
-                    
-                    if row['Whale'] == '🐋':
-                        st.warning("🐋 WHALE ACTIVITY DETECTED!")
-                    
-                    if row['80% Setup'] == '⭐':
-                        st.success("⭐ 80% WIN RATE SETUP!")
-                    
-                    # BOUTON TRACK THIS SIGNAL - ULTRA SAFE VERSION
-                    if st.button("📊 TRACK THIS SIGNAL", key=f"track_{row['Symbol']}_{idx}"):
-                        success = add_signal_to_tracker(
-                            row['Symbol'], row['Entry'], row['Stop'],
-                            row['TP1'], row['TP2'], row['TP3'],
-                            row['Quantum'], row['AI'], row['Tier'],
-                            row['Flow'], row['RSI']
-                        )
+for idx, row in results.iterrows():
+    with st.expander(f"{row['Tier']} {row['Symbol']} | Q:{row['Quantum']:.0f} AI:{row['AI']:.0f}"):
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("Entry", f"${row['Entry']:.2f}")
+            st.metric("Stop", f"${row['Stop']:.2f}")
+        
+        with col2:
+            st.metric("TP1", f"${row['TP1']:.2f}")
+            st.metric("TP2", f"${row['TP2']:.2f}")
+        
+        with col3:
+            st.metric("TP3", f"${row['TP3']:.2f}")
+            st.metric("RSI", f"{row['RSI']:.1f}")
+        
+        st.write(f"📈 Flow: {row['Flow']}")
+        st.write(f"💡 Recommendation: {row['Recommendation']}")
+        
+        if row['Whale'] == '🐋':
+            st.warning("🐋 WHALE ACTIVITY DETECTED!")
+        
+        if row['80% Setup'] == '⭐':
+            st.success("⭐ 80% WIN RATE SETUP!")
+        
+        # BOUTON TRACK THIS SIGNAL - VERSION FIXED
+        track_key = f"track_{row['Symbol']}_{row['Entry']:.2f}_{idx}"
+        
+        if st.button("📊 TRACK THIS SIGNAL", key=track_key, type="primary"):
+            # Crée le signal directement dans session_state
+            new_signal = {
+                'symbol': str(row['Symbol']),
+                'entry_price': float(row['Entry']),
+                'entry_date': datetime.now().strftime('%Y-%m-%d %H:%M'),
+                'stop': float(row['Stop']),
+                'tp1': float(row['TP1']),
+                'tp2': float(row['TP2']),
+                'tp3': float(row['TP3']),
+                'quantum_score': float(row['Quantum']),
+                'ai_score': float(row['AI']),
+                'tier': str(row['Tier']),
+                'flow': str(row['Flow']),
+                'rsi': float(row['RSI']),
+                'status': 'ACTIVE',
+                'exit_price': None,
+                'exit_reason': None,
+                'exit_date': None,
+                'pnl': 0,
+                'pnl_pct': 0
+            }
+            
+            # Vérifie si existe déjà
+            exists = False
+            for sig in st.session_state.active_signals:
+                if sig['symbol'] == row['Symbol'] and sig['status'] == 'ACTIVE':
+                    if abs(sig['entry_price'] - float(row['Entry'])) < 0.01:
+                        exists = True
+                        break
+            
+            if not exists:
+                st.session_state.active_signals.append(new_signal)
+                st.balloons()
+                st.success(f"✅ {row['Symbol']} tracked! Total active: {len(st.session_state.active_signals)}")
+                
+                # Telegram alert
+                if st.session_state.telegram_enabled and row['Tier'] in ['💎 DIAMOND', '🥇 PLATINUM']:
+                    msg = f"""
+🥓 <b>SIGNAL TRACKED!</b>
+
+{row['Tier']} <b>{row['Symbol']}</b>
+
+📊 Quantum: {row['Quantum']:.0f}/300
+🤖 AI: {row['AI']:.0f}/100
+
+💰 Entry: ${row['Entry']:.2f}
+🛑 Stop: ${row['Stop']:.2f}
+🎯 TP1: ${row['TP1']:.2f} | TP2: ${row['TP2']:.2f} | TP3: ${row['TP3']:.2f}
+
+📈 Flow: {row['Flow']}
+📊 RSI: {row['RSI']:.1f}
+
+⚡ Now tracking!
+                    """
+                    send_telegram_alert(msg)
+            else:
+                st.warning(f"⚠️ {row['Symbol']} is already being tracked!")
                         
                         if success:
                             st.balloons()
