@@ -1579,22 +1579,60 @@ with tab6:
 with tab7:
     st.header("📊 SIGNAL TRACKER")
     
-    with st.expander("🧪 MANUAL TEST"):
-        if st.button("➕ Add Test Signal (AAPL)"):
-            st.session_state.active_signals.append({
-                'symbol': 'AAPL', 'entry_price': 195.50, 'entry_date': datetime.now().strftime('%Y-%m-%d %H:%M'),
-                'stop': 190.00, 'tp1': 200.00, 'tp2': 205.00, 'tp3': 210.00,
-                'quantum_score': 250.0, 'ai_score': 85.0, 'tier': '🥇 PLATINUM',
-                'flow': 'BULLISH', 'rsi': 55.0, 'status': 'ACTIVE',
-                'exit_price': None, 'exit_reason': None, 'exit_date': None, 'pnl': 0, 'pnl_pct': 0
-            })
-            st.success(f"✅ Test added! Total: {len(st.session_state.active_signals)}")
+    # ==================== DEBUG SECTION ====================
+    with st.expander("🔍 DEBUG MODE", expanded=True):
+        st.subheader("🧪 Session State Debug")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.metric("Active Signals Count", len(st.session_state.active_signals))
+            st.metric("Closed Signals Count", len(st.session_state.closed_signals))
+        
+        with col2:
+            if st.button("➕ ADD TEST SIGNAL (AAPL)", use_container_width=True):
+                test_signal = {
+                    'symbol': 'AAPL',
+                    'entry_price': 195.50,
+                    'entry_date': datetime.now().strftime('%Y-%m-%d %H:%M'),
+                    'stop': 190.00,
+                    'tp1': 200.00,
+                    'tp2': 205.00,
+                    'tp3': 210.00,
+                    'quantum_score': 250.0,
+                    'ai_score': 85.0,
+                    'tier': '🥇 PLATINUM',
+                    'flow': 'BULLISH',
+                    'rsi': 55.0,
+                    'status': 'ACTIVE',
+                    'exit_price': None,
+                    'exit_reason': None,
+                    'exit_date': None,
+                    'pnl': 0,
+                    'pnl_pct': 0
+                }
+                st.session_state.active_signals.append(test_signal)
+                st.success(f"✅ Test signal added! Total: {len(st.session_state.active_signals)}")
+                st.balloons()
+                time.sleep(1)
+                st.rerun()
+            
+            if st.button("🗑️ CLEAR ALL SIGNALS", use_container_width=True):
+                st.session_state.active_signals = []
+                st.session_state.closed_signals = []
+                st.success("✅ All signals cleared!")
+                st.rerun()
+        
+        st.markdown("---")
+        
+        st.write("**Raw Session State:**")
+        st.json({
+            'active_count': len(st.session_state.active_signals),
+            'active_signals': st.session_state.active_signals,
+            'closed_count': len(st.session_state.closed_signals)
+        })
     
-    with st.expander("🔧 DEBUG"):
-        st.write(f"Active: {len(st.session_state.active_signals)}")
-        for sig in st.session_state.active_signals:
-            st.write(f"- {sig['symbol']} @ ${sig['entry_price']:.2f}")
-    
+    # ==================== REST OF TAB 7 ====================
     if st.button("🔄 REFRESH", use_container_width=True):
         update_signal_status()
         st.success("✅ Updated!")
@@ -1603,6 +1641,8 @@ with tab7:
     st.markdown("---")
     
     tab_active, tab_closed = st.tabs(["🟢 Active", "📝 Closed"])
+    
+    # ... (reste du code comme avant)
     
     with tab_active:
         if len(st.session_state.active_signals) > 0:
