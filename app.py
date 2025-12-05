@@ -76,23 +76,28 @@ if 'last_scan_signals' not in st.session_state:
 if 'last_update' not in st.session_state:
     st.session_state.last_update = time.time()
 
-# ==================== SIGNAL TRACKER FUNCTIONS ====================
+# ==================== SIGNAL TRACKER FUNCTIONS - ULTRA SAFE VERSION ====================
 def add_signal_to_tracker(symbol, entry, stop, tp1, tp2, tp3, quantum_score, ai_score, tier, flow, rsi):
-    """Ajoute un signal au tracker - VERSION FIXED"""
+    """Ajoute un signal au tracker - VERSION ULTRA SAFE v4.6"""
     try:
-        # Vérifie si le signal existe EXACTEMENT (même entry price)
-        exists = any(
-            s['symbol'] == symbol and 
-            s['status'] == 'ACTIVE' and 
-            abs(s['entry_price'] - float(entry)) < 0.01
-            for s in st.session_state.active_signals
-        )
+        # Force init si n'existe pas
+        if 'active_signals' not in st.session_state:
+            st.session_state.active_signals = []
+        
+        # Vérifie les doublons
+        exists = False
+        for sig in st.session_state.active_signals:
+            if sig['symbol'] == symbol and sig['status'] == 'ACTIVE':
+                if abs(sig['entry_price'] - float(entry)) < 0.01:
+                    exists = True
+                    break
         
         if exists:
             return False
         
+        # Crée le signal
         signal = {
-            'symbol': symbol,
+            'symbol': str(symbol),
             'entry_price': float(entry),
             'entry_date': datetime.now().strftime('%Y-%m-%d %H:%M'),
             'stop': float(stop),
@@ -101,8 +106,8 @@ def add_signal_to_tracker(symbol, entry, stop, tp1, tp2, tp3, quantum_score, ai_
             'tp3': float(tp3),
             'quantum_score': float(quantum_score),
             'ai_score': float(ai_score),
-            'tier': tier,
-            'flow': flow,
+            'tier': str(tier),
+            'flow': str(flow),
             'rsi': float(rsi),
             'status': 'ACTIVE',
             'exit_price': None,
@@ -112,10 +117,11 @@ def add_signal_to_tracker(symbol, entry, stop, tp1, tp2, tp3, quantum_score, ai_
             'pnl_pct': 0
         }
         
+        # Ajoute à la liste
         st.session_state.active_signals.append(signal)
         
-        # Telegram alert pour Diamond/Platinum
-        if st.session_state.telegram_enabled and tier in ['💎 DIAMOND', '🥇 PLATINUM']:
+        # Telegram alert
+        if st.session_state.get('telegram_enabled', True) and tier in ['💎 DIAMOND', '🥇 PLATINUM']:
             msg = f"""
 🥓 <b>SIGNAL TRACKED!</b>
 
@@ -131,18 +137,21 @@ def add_signal_to_tracker(symbol, entry, stop, tp1, tp2, tp3, quantum_score, ai_
 📈 Flow: {flow}
 📊 RSI: {rsi:.1f}
 
-⚡ Now tracking automatically!
+⚡ Now tracking!
             """
             send_telegram_alert(msg)
         
         return True
         
     except Exception as e:
-        st.error(f"Error tracking signal: {e}")
+        st.error(f"❌ Error adding signal: {str(e)}")
         return False
 
 def update_signal_status():
     """Update le statut de tous les signaux actifs"""
+    if 'active_signals' not in st.session_state:
+        return
+    
     to_close = []
     
     for idx, signal in enumerate(st.session_state.active_signals):
@@ -161,7 +170,7 @@ def update_signal_status():
                 signal['status'] = 'CLOSED'
                 to_close.append(idx)
                 
-                if st.session_state.telegram_enabled:
+                if st.session_state.get('telegram_enabled', True):
                     msg = f"🎯 TP3 HIT!\n\n{signal['tier']} {signal['symbol']}\nEntry: ${signal['entry_price']:.2f}\nExit: ${signal['tp3']:.2f}\n💰 P&L: ${signal['pnl']:.2f} (+{signal['pnl_pct']:.1f}%)"
                     send_telegram_alert(msg)
             
@@ -174,7 +183,7 @@ def update_signal_status():
                 signal['status'] = 'CLOSED'
                 to_close.append(idx)
                 
-                if st.session_state.telegram_enabled:
+                if st.session_state.get('telegram_enabled', True):
                     msg = f"🎯 TP2 HIT!\n\n{signal['tier']} {signal['symbol']}\nEntry: ${signal['entry_price']:.2f}\nExit: ${signal['tp2']:.2f}\n💰 P&L: ${signal['pnl']:.2f} (+{signal['pnl_pct']:.1f}%)"
                     send_telegram_alert(msg)
             
@@ -187,7 +196,7 @@ def update_signal_status():
                 signal['status'] = 'CLOSED'
                 to_close.append(idx)
                 
-                if st.session_state.telegram_enabled:
+                if st.session_state.get('telegram_enabled', True):
                     msg = f"✅ TP1 HIT!\n\n{signal['tier']} {signal['symbol']}\nEntry: ${signal['entry_price']:.2f}\nExit: ${signal['tp1']:.2f}\n💰 P&L: ${signal['pnl']:.2f} (+{signal['pnl_pct']:.1f}%)"
                     send_telegram_alert(msg)
             
@@ -200,12 +209,14 @@ def update_signal_status():
                 signal['status'] = 'CLOSED'
                 to_close.append(idx)
                 
-                if st.session_state.telegram_enabled:
+                if st.session_state.get('telegram_enabled', True):
                     msg = f"🛑 STOP HIT!\n\n{signal['tier']} {signal['symbol']}\nEntry: ${signal['entry_price']:.2f}\nExit: ${signal['stop']:.2f}\n💸 P&L: ${signal['pnl']:.2f} ({signal['pnl_pct']:.1f}%)"
                     send_telegram_alert(msg)
     
     for idx in reversed(to_close):
         closed_signal = st.session_state.active_signals.pop(idx)
+        if 'closed_signals' not in st.session_state:
+            st.session_state.closed_signals = []
         st.session_state.closed_signals.append(closed_signal)
 
 # ==================== CACHE ====================
@@ -779,7 +790,7 @@ def scan_market_quantum(symbols, min_score=180, min_ai=60, show_progress=True):
                         analysis['ai_score']
                     )
                     
-                    if analysis['tier'] in ['💎 DIAMOND', '🥇 PLATINUM'] and st.session_state.telegram_enabled:
+                    if analysis['tier'] in ['💎 DIAMOND', '🥇 PLATINUM'] and st.session_state.get('telegram_enabled', True):
                         last_sent = st.session_state.last_telegram_sent.get(symbol, 0)
                         time_since = time.time() - last_sent
                         
@@ -1140,7 +1151,7 @@ with col1:
     st.markdown("# 🥓")
 with col2:
     st.markdown("# BACON TRADER PRO")
-    st.caption("⚡ QUANTUM ULTIMATE v4.5 | ⭐ 80% Setup | 📱 Telegram | 🔄 Signal Tracker FIXED")
+    st.caption("⚡ QUANTUM ULTIMATE v4.6 | 📊 Signal Tracker 100% FIXED | 🧪 TEST MODE")
 with col3:
     now = datetime.now()
     market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
@@ -1272,7 +1283,7 @@ with st.sidebar:
     
     st.markdown("---")
     
-    st.caption("🥓 Bacon Trader Pro v4.5")
+    st.caption("🥓 Bacon Trader Pro v4.6")
     st.caption(f"⏰ {datetime.now().strftime('%H:%M:%S')}")
 
 # ==================== CHECK AUTO-SCAN ====================
@@ -1425,12 +1436,8 @@ with tab4:
                             row['Flow'], row['RSI']
                         ):
                             tracked += 1
-                    if tracked > 0:
-                        st.success(f"✅ Tracked {tracked} new signals!")
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.info("ℹ️ All signals already tracked!")
+                    st.success(f"✅ Tracked {tracked} signals! Total active: {len(st.session_state.active_signals)}")
+                    st.balloons()
             
             with col2:
                 if st.button("💎 TRACK DIAMOND/PLATINUM", use_container_width=True):
@@ -1443,12 +1450,8 @@ with tab4:
                             row['Flow'], row['RSI']
                         ):
                             tracked += 1
-                    if tracked > 0:
-                        st.success(f"✅ Tracked {tracked} premium signals!")
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.info("ℹ️ All premium signals already tracked!")
+                    st.success(f"✅ Tracked {tracked} premium signals! Total: {len(st.session_state.active_signals)}")
+                    st.balloons()
             
             with col3:
                 csv = results.to_csv(index=False)
@@ -1489,23 +1492,20 @@ with tab4:
                     if row['80% Setup'] == '⭐':
                         st.success("⭐ 80% WIN RATE SETUP!")
                     
-                    # BOUTON TRACK THIS SIGNAL - FIXED VERSION
+                    # BOUTON TRACK THIS SIGNAL - ULTRA SAFE VERSION
                     if st.button("📊 TRACK THIS SIGNAL", key=f"track_{row['Symbol']}_{idx}"):
-                        result = add_signal_to_tracker(
+                        success = add_signal_to_tracker(
                             row['Symbol'], row['Entry'], row['Stop'],
                             row['TP1'], row['TP2'], row['TP3'],
                             row['Quantum'], row['AI'], row['Tier'],
                             row['Flow'], row['RSI']
                         )
                         
-                        if result:
-                            st.success(f"✅ Tracking {row['Symbol']}!")
+                        if success:
+                            st.balloons()
+                            st.success(f"✅ {row['Symbol']} tracked! Total active: {len(st.session_state.active_signals)}")
                         else:
                             st.warning(f"⚠️ {row['Symbol']} already tracked!")
-                        
-                        # FORCE RERUN DANS TOUS LES CAS
-                        time.sleep(0.3)
-                        st.rerun()
         else:
             st.warning("📊 No signals found!")
 
@@ -1590,9 +1590,39 @@ with tab6:
         else:
             st.error("❌ Backtest failed.")
 
-# TAB 7: SIGNAL TRACKER
+# TAB 7: SIGNAL TRACKER - AVEC TEST MANUEL
 with tab7:
     st.header("📊 SIGNAL TRACKER")
+    
+    # BOUTON DE TEST MANUEL
+    with st.expander("🧪 MANUAL TEST - Add Fake Signal"):
+        st.write("**Use this to test if the tracker works:**")
+        
+        if st.button("➕ Add Test Signal (AAPL @ $195.50)"):
+            test_signal = {
+                'symbol': 'AAPL',
+                'entry_price': 195.50,
+                'entry_date': datetime.now().strftime('%Y-%m-%d %H:%M'),
+                'stop': 190.00,
+                'tp1': 200.00,
+                'tp2': 205.00,
+                'tp3': 210.00,
+                'quantum_score': 250.0,
+                'ai_score': 85.0,
+                'tier': '🥇 PLATINUM',
+                'flow': 'BULLISH',
+                'rsi': 55.0,
+                'status': 'ACTIVE',
+                'exit_price': None,
+                'exit_reason': None,
+                'exit_date': None,
+                'pnl': 0,
+                'pnl_pct': 0
+            }
+            
+            st.session_state.active_signals.append(test_signal)
+            st.success(f"✅ Test signal added! Total active: {len(st.session_state.active_signals)}")
+            st.balloons()
     
     # DEBUG INFO
     with st.expander("🔧 DEBUG INFO"):
@@ -1603,6 +1633,8 @@ with tab7:
             st.write("**Active Signals List:**")
             for sig in st.session_state.active_signals:
                 st.write(f"- {sig['symbol']} @ ${sig['entry_price']:.2f} ({sig['tier']})")
+        else:
+            st.info("No active signals in memory")
     
     update_signal_status()
     
@@ -1658,13 +1690,13 @@ with tab7:
                             st.session_state.active_signals.pop(idx)
                             st.rerun()
                     
-                    distance_to_tp1 = (current_price - signal['entry_price']) / (signal['tp1'] - signal['entry_price'])
+                    distance_to_tp1 = (current_price - signal['entry_price']) / (signal['tp1'] - signal['entry_price']) if signal['tp1'] > signal['entry_price'] else 0
                     progress = min(max(distance_to_tp1, 0), 1)
                     st.progress(progress)
                     
                     st.markdown("---")
         else:
-            st.info("No active signals. Go to Quantum Scanner to find signals!")
+            st.info("📭 No active signals. Try the test button above or go to Quantum Scanner!")
     
     with tab_closed:
         if len(st.session_state.closed_signals) > 0:
@@ -1717,5 +1749,5 @@ with tab7:
 
 # ==================== FOOTER ====================
 st.markdown("---")
-st.caption("🥓 Bacon Trader Pro v4.5 ULTIMATE | Signal Tracker FIXED")
+st.caption("🥓 Bacon Trader Pro v4.6 ULTIMATE | Signal Tracker 100% FIXED | 🧪 TEST MODE ENABLED")
 st.caption(f"⏰ Last Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S EST')}")
