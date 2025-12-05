@@ -1265,6 +1265,8 @@ with tab3:
     else:
         st.info("No long-term positions. Add one in the sidebar!")
 
+# (Garde tout le code jusqu'à TAB 4, je te donne juste la section TAB 4 corrigée)
+
 # TAB 4: QUANTUM SCANNER
 with tab4:
     st.header("🔍 QUANTUM SCANNER")
@@ -1291,8 +1293,129 @@ with tab4:
         if len(results) > 0:
             st.success(f"✅ Found {len(results)} signals!")
             
+            # BOUTONS TRACK EN HAUT
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                if st.button("📊 TRACK ALL VISIBLE", use_container_width=True, type="secondary"):
+                    tracked = 0
+                    for _, row in results.iterrows():
+                        new_signal = {
+                            'symbol': str(row['Symbol']),
+                            'entry_price': float(row['Entry']),
+                            'entry_date': datetime.now().strftime('%Y-%m-%d %H:%M'),
+                            'stop': float(row['Stop']),
+                            'tp1': float(row['TP1']),
+                            'tp2': float(row['TP2']),
+                            'tp3': float(row['TP3']),
+                            'quantum_score': float(row['Quantum']),
+                            'ai_score': float(row['AI']),
+                            'tier': str(row['Tier']),
+                            'flow': str(row['Flow']),
+                            'rsi': float(row['RSI']),
+                            'status': 'ACTIVE',
+                            'exit_price': None,
+                            'exit_reason': None,
+                            'exit_date': None,
+                            'pnl': 0,
+                            'pnl_pct': 0
+                        }
+                        
+                        exists = any(
+                            s['symbol'] == row['Symbol'] and 
+                            s['status'] == 'ACTIVE' and 
+                            abs(s['entry_price'] - float(row['Entry'])) < 0.01 
+                            for s in st.session_state.active_signals
+                        )
+                        
+                        if not exists:
+                            st.session_state.active_signals.append(new_signal)
+                            tracked += 1
+                    
+                    if tracked > 0:
+                        st.success(f"✅ Tracked {tracked} new signals!")
+                        st.balloons()
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.info("ℹ️ All signals already tracked!")
+            
+            with col2:
+                if st.button("💎 TRACK DIAMOND/PLATINUM", use_container_width=True, type="secondary"):
+                    tracked = 0
+                    premium_results = results[results['Tier'].isin(['💎 DIAMOND', '🥇 PLATINUM'])]
+                    
+                    for _, row in premium_results.iterrows():
+                        new_signal = {
+                            'symbol': str(row['Symbol']),
+                            'entry_price': float(row['Entry']),
+                            'entry_date': datetime.now().strftime('%Y-%m-%d %H:%M'),
+                            'stop': float(row['Stop']),
+                            'tp1': float(row['TP1']),
+                            'tp2': float(row['TP2']),
+                            'tp3': float(row['TP3']),
+                            'quantum_score': float(row['Quantum']),
+                            'ai_score': float(row['AI']),
+                            'tier': str(row['Tier']),
+                            'flow': str(row['Flow']),
+                            'rsi': float(row['RSI']),
+                            'status': 'ACTIVE',
+                            'exit_price': None,
+                            'exit_reason': None,
+                            'exit_date': None,
+                            'pnl': 0,
+                            'pnl_pct': 0
+                        }
+                        
+                        exists = any(
+                            s['symbol'] == row['Symbol'] and 
+                            s['status'] == 'ACTIVE' and 
+                            abs(s['entry_price'] - float(row['Entry'])) < 0.01 
+                            for s in st.session_state.active_signals
+                        )
+                        
+                        if not exists:
+                            st.session_state.active_signals.append(new_signal)
+                            tracked += 1
+                            
+                            # Telegram pour premium
+                            if st.session_state.telegram_enabled:
+                                msg = f"""🥓 PREMIUM TRACKED!
+
+{row['Tier']} {row['Symbol']}
+
+📊 Q: {row['Quantum']:.0f} | AI: {row['AI']:.0f}
+💰 Entry: ${row['Entry']:.2f}
+🎯 TP1: ${row['TP1']:.2f} | TP2: ${row['TP2']:.2f} | TP3: ${row['TP3']:.2f}
+🛑 Stop: ${row['Stop']:.2f}"""
+                                send_telegram_alert(msg)
+                    
+                    if tracked > 0:
+                        st.success(f"✅ Tracked {tracked} premium signals!")
+                        st.balloons()
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.info("ℹ️ All premium signals already tracked!")
+            
+            with col3:
+                csv = results.to_csv(index=False)
+                st.download_button(
+                    "💾 DOWNLOAD CSV",
+                    csv,
+                    "quantum_signals.csv",
+                    "text/csv",
+                    use_container_width=True
+                )
+            
+            st.markdown("---")
+            
+            # TABLEAU DES RÉSULTATS
             st.dataframe(results, use_container_width=True, hide_index=True)
             
+            st.markdown("---")
+            
+            # SECTION EXPANDERS INDIVIDUELS
             st.subheader("📊 Individual Signal Actions")
             
             for idx, row in results.iterrows():
@@ -1320,40 +1443,51 @@ with tab4:
                     if row['80% Setup'] == '⭐':
                         st.success("⭐ 80% WIN RATE SETUP!")
                     
-                    # BOUTON TRACK THIS SIGNAL
-                    track_key = f"track_{row['Symbol']}_{row['Entry']:.2f}_{idx}"
+                    st.markdown("---")
                     
-                    if st.button("📊 TRACK THIS SIGNAL", key=track_key, type="primary"):
-                        new_signal = {
-                            'symbol': str(row['Symbol']),
-                            'entry_price': float(row['Entry']),
-                            'entry_date': datetime.now().strftime('%Y-%m-%d %H:%M'),
-                            'stop': float(row['Stop']),
-                            'tp1': float(row['TP1']),
-                            'tp2': float(row['TP2']),
-                            'tp3': float(row['TP3']),
-                            'quantum_score': float(row['Quantum']),
-                            'ai_score': float(row['AI']),
-                            'tier': str(row['Tier']),
-                            'flow': str(row['Flow']),
-                            'rsi': float(row['RSI']),
-                            'status': 'ACTIVE',
-                            'exit_price': None,
-                            'exit_reason': None,
-                            'exit_date': None,
-                            'pnl': 0,
-                            'pnl_pct': 0
-                        }
-                        
-                        exists = any(s['symbol'] == row['Symbol'] and s['status'] == 'ACTIVE' and abs(s['entry_price'] - float(row['Entry'])) < 0.01 for s in st.session_state.active_signals)
-                        
-                        if not exists:
-                            st.session_state.active_signals.append(new_signal)
-                            st.balloons()
-                            st.success(f"✅ {row['Symbol']} tracked! Total: {len(st.session_state.active_signals)}")
+                    # BOUTON TRACK THIS SIGNAL
+                    track_key = f"track_individual_{row['Symbol']}_{row['Entry']:.2f}_{idx}"
+                    
+                    col_btn1, col_btn2 = st.columns(2)
+                    
+                    with col_btn1:
+                        if st.button("📊 TRACK THIS SIGNAL", key=track_key, type="primary", use_container_width=True):
+                            new_signal = {
+                                'symbol': str(row['Symbol']),
+                                'entry_price': float(row['Entry']),
+                                'entry_date': datetime.now().strftime('%Y-%m-%d %H:%M'),
+                                'stop': float(row['Stop']),
+                                'tp1': float(row['TP1']),
+                                'tp2': float(row['TP2']),
+                                'tp3': float(row['TP3']),
+                                'quantum_score': float(row['Quantum']),
+                                'ai_score': float(row['AI']),
+                                'tier': str(row['Tier']),
+                                'flow': str(row['Flow']),
+                                'rsi': float(row['RSI']),
+                                'status': 'ACTIVE',
+                                'exit_price': None,
+                                'exit_reason': None,
+                                'exit_date': None,
+                                'pnl': 0,
+                                'pnl_pct': 0
+                            }
                             
-                            if st.session_state.telegram_enabled and row['Tier'] in ['💎 DIAMOND', '🥇 PLATINUM']:
-                                msg = f"""🥓 SIGNAL TRACKED!
+                            exists = any(
+                                s['symbol'] == row['Symbol'] and 
+                                s['status'] == 'ACTIVE' and 
+                                abs(s['entry_price'] - float(row['Entry'])) < 0.01 
+                                for s in st.session_state.active_signals
+                            )
+                            
+                            if not exists:
+                                st.session_state.active_signals.append(new_signal)
+                                st.balloons()
+                                st.success(f"✅ {row['Symbol']} tracked! Total: {len(st.session_state.active_signals)}")
+                                
+                                # Telegram pour Diamond/Platinum
+                                if st.session_state.telegram_enabled and row['Tier'] in ['💎 DIAMOND', '🥇 PLATINUM']:
+                                    msg = f"""🥓 SIGNAL TRACKED!
 
 {row['Tier']} {row['Symbol']}
 
@@ -1368,12 +1502,17 @@ with tab4:
 📊 RSI: {row['RSI']:.1f}
 
 ⚡ Now tracking!"""
-                                send_telegram_alert(msg)
-                        else:
-                            st.warning(f"⚠️ {row['Symbol']} already tracked!")
+                                    send_telegram_alert(msg)
+                                
+                                time.sleep(0.5)
+                                st.rerun()
+                            else:
+                                st.warning(f"⚠️ {row['Symbol']} already tracked!")
+                    
+                    with col_btn2:
+                        st.metric("Active Signals", len(st.session_state.active_signals))
         else:
             st.warning("📊 No signals found!")
-
 # TAB 5: SMART MONEY
 with tab5:
     st.header("🧠 SMART MONEY CONCEPTS")
