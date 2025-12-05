@@ -1454,15 +1454,7 @@ for idx, row in results.iterrows():
                 st.success("✅ Tracked")
         
         st.markdown("---")
-                                st.balloons()
-                        else:
-                            st.info(f"✅ Tracking {row['Symbol']}")
-                    with col2:
-                        st.metric("Tracked", len(st.session_state.active_signals))
-        else:
-            st.warning("📊 No signals found!")
-
-# TAB 5: SMART MONEY
+                            # TAB 5: SMART MONEY
 with tab5:
     st.header("🧠 SMART MONEY CONCEPTS")
     
