@@ -78,9 +78,15 @@ if 'last_update' not in st.session_state:
 
 # ==================== SIGNAL TRACKER FUNCTIONS ====================
 def add_signal_to_tracker(symbol, entry, stop, tp1, tp2, tp3, quantum_score, ai_score, tier, flow, rsi):
-    """Ajoute un signal au tracker"""
+    """Ajoute un signal au tracker - VERSION FIXED"""
     try:
-        exists = any(s['symbol'] == symbol and s['status'] == 'ACTIVE' for s in st.session_state.active_signals)
+        # Vérifie si le signal existe EXACTEMENT (même entry price)
+        exists = any(
+            s['symbol'] == symbol and 
+            s['status'] == 'ACTIVE' and 
+            abs(s['entry_price'] - float(entry)) < 0.01
+            for s in st.session_state.active_signals
+        )
         
         if exists:
             return False
@@ -108,6 +114,7 @@ def add_signal_to_tracker(symbol, entry, stop, tp1, tp2, tp3, quantum_score, ai_
         
         st.session_state.active_signals.append(signal)
         
+        # Telegram alert pour Diamond/Platinum
         if st.session_state.telegram_enabled and tier in ['💎 DIAMOND', '🥇 PLATINUM']:
             msg = f"""
 🥓 <b>SIGNAL TRACKED!</b>
@@ -131,6 +138,7 @@ def add_signal_to_tracker(symbol, entry, stop, tp1, tp2, tp3, quantum_score, ai_
         return True
         
     except Exception as e:
+        st.error(f"Error tracking signal: {e}")
         return False
 
 def update_signal_status():
@@ -228,11 +236,10 @@ MARKETS = {
         "WFC", "DHR", "VZ", "TXN", "PM", "QCOM", "NEE", "IBM", "HON", "UNP"
     ],
     
-    "🇺🇸 DOW 30 COMPLET": [
+    "🇺🇸 DOW 30": [
         "AAPL", "MSFT", "NVDA", "AMZN", "WMT", "JPM", "V", "JNJ", "HD", "PG",
         "UNH", "CSCO", "CVX", "KO", "IBM", "CAT", "GS", "MRK", "AXP", "CRM",
-        "MCD", "DIS", "AMGN", "VZ", "BA", "HON", "NKE", "MMM", "SHW", "TRV",
-        "RTX", "PFE", "DOW", "WBA"
+        "MCD", "DIS", "AMGN", "VZ", "BA", "HON", "NKE", "MMM", "SHW", "TRV"
     ],
     
     "💼 S&P 100": [
@@ -248,7 +255,7 @@ MARKETS = {
         "MU", "ZTS", "BSX", "SLB", "USB", "DUK", "MCK", "PH", "EOG", "KLAC"
     ],
     
-    "₿ CRYPTO TOP 30 COMPLET": [
+    "₿ CRYPTO TOP 30": [
         "BTC-USD", "ETH-USD", "BNB-USD", "SOL-USD", "XRP-USD", "ADA-USD",
         "AVAX-USD", "DOGE-USD", "DOT-USD", "MATIC-USD", "SHIB-USD", "LTC-USD",
         "UNI-USD", "LINK-USD", "ATOM-USD", "XLM-USD", "ALGO-USD", "VET-USD",
@@ -256,7 +263,7 @@ MARKETS = {
         "NEAR-USD", "STX-USD", "IMX-USD", "INJ-USD", "TIA-USD", "RUNE-USD"
     ],
     
-    "🇨🇦 TSX TOP 30 COMPLET": [
+    "🇨🇦 TSX TOP 30": [
         "RY.TO", "TD.TO", "ENB.TO", "BNS.TO", "CNR.TO", "BMO.TO", "CNQ.TO", "CP.TO",
         "SU.TO", "BCE.TO", "CM.TO", "TRP.TO", "ABX.TO", "MFC.TO", "SLF.TO", "FNV.TO",
         "NTR.TO", "WCN.TO", "BAM.TO", "QSR.TO", "SHOP.TO", "TRI.TO", "WN.TO", "ATD.TO",
@@ -1133,7 +1140,7 @@ with col1:
     st.markdown("# 🥓")
 with col2:
     st.markdown("# BACON TRADER PRO")
-    st.caption("⚡ QUANTUM ULTIMATE v4.4 | ⭐ 80% Setup | 📱 Telegram | 🧪 Backtest | 🔄 AUTO-SCAN")
+    st.caption("⚡ QUANTUM ULTIMATE v4.5 | ⭐ 80% Setup | 📱 Telegram | 🔄 Signal Tracker FIXED")
 with col3:
     now = datetime.now()
     market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
@@ -1152,11 +1159,11 @@ if current_time - st.session_state.last_update > 30:
     update_signal_status()
     st.session_state.last_update = current_time
 
-# ==================== SIDEBAR - FIXED ====================
+# ==================== SIDEBAR ====================
 with st.sidebar:
     st.header("⚙️ QUANTUM CONTROL")
     
-    st.session_state.telegram_enabled = st.toggle("📱 Telegram Alerts", value=st.session_state.telegram_enabled, key="toggle_telegram")
+    st.session_state.telegram_enabled = st.toggle("📱 Telegram Alerts", value=st.session_state.telegram_enabled)
     
     if st.session_state.telegram_enabled:
         st.success("✅ Telegram ON")
@@ -1167,7 +1174,7 @@ with st.sidebar:
     
     st.subheader("🔄 AUTO-SCAN (30min)")
     
-    st.session_state.auto_scan_enabled = st.toggle("Enable Auto-Scan", value=st.session_state.auto_scan_enabled, key="toggle_autoscan")
+    st.session_state.auto_scan_enabled = st.toggle("Enable Auto-Scan", value=st.session_state.auto_scan_enabled)
     
     if st.session_state.auto_scan_enabled:
         st.success("✅ Auto-Scan ACTIVE")
@@ -1180,12 +1187,12 @@ with st.sidebar:
                 st.info(f"Next scan in {int(time_until/60)} min")
             else:
                 st.warning("Scan en attente...")
-                if st.button("🚀 FORCE SCAN NOW", key="btn_force_scan"):
+                if st.button("🚀 FORCE SCAN NOW"):
                     with st.spinner("Auto-scanning..."):
                         run_auto_scan()
                     st.rerun()
         else:
-            if st.button("🚀 START AUTO-SCAN", key="btn_start_autoscan"):
+            if st.button("🚀 START AUTO-SCAN"):
                 with st.spinner("Running first scan..."):
                     run_auto_scan()
                 st.rerun()
@@ -1194,7 +1201,7 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # ==================== DAY TRADING - FIXED ====================
+    # DAY TRADING
     day_stats = calculate_portfolio_stats('day')
     st.subheader("💰 DAY TRADING")
     st.metric("Value", f"${day_stats['total_value']:,.2f}")
@@ -1202,11 +1209,11 @@ with st.sidebar:
     
     st.markdown("**➕ Add Day Position:**")
     
-    day_symbol = st.text_input("Symbol", "", key="input_day_symbol", placeholder="AAPL").upper()
-    day_qty = st.number_input("Quantity", min_value=1, value=10, key="input_day_qty")
-    day_entry = st.number_input("Entry Price", min_value=0.01, value=100.00, step=0.01, key="input_day_entry")
+    day_symbol = st.text_input("Symbol", "", placeholder="AAPL").upper()
+    day_qty = st.number_input("Quantity", min_value=1, value=10)
+    day_entry = st.number_input("Entry Price", min_value=0.01, value=100.00, step=0.01)
     
-    if st.button("➕ Add Day Position", use_container_width=True, key="btn_add_day"):
+    if st.button("➕ Add Day Position", use_container_width=True):
         if day_symbol and len(day_symbol) > 0:
             add_day_position(day_symbol, day_qty, day_entry)
             st.success(f"✅ Added {day_qty} {day_symbol} @ ${day_entry}")
@@ -1217,7 +1224,7 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # ==================== LONG-TERM - FIXED ====================
+    # LONG-TERM
     lt_stats = calculate_portfolio_stats('long')
     st.subheader("📊 LONG-TERM (CÉLI)")
     st.metric("Value", f"${lt_stats['total_value']:,.2f}")
@@ -1225,11 +1232,11 @@ with st.sidebar:
     
     st.markdown("**➕ Add Long Position:**")
     
-    lt_symbol = st.text_input("Symbol", "", key="input_lt_symbol", placeholder="MSFT").upper()
-    lt_qty = st.number_input("Quantity", min_value=1, value=50, key="input_lt_qty")
-    lt_entry = st.number_input("Entry Price", min_value=0.01, value=150.00, step=0.01, key="input_lt_entry")
+    lt_symbol = st.text_input("Symbol ", "", placeholder="MSFT").upper()
+    lt_qty = st.number_input("Quantity ", min_value=1, value=50)
+    lt_entry = st.number_input("Entry Price ", min_value=0.01, value=150.00, step=0.01)
     
-    if st.button("➕ Add Long Position", use_container_width=True, key="btn_add_long"):
+    if st.button("➕ Add Long Position", use_container_width=True):
         if lt_symbol and len(lt_symbol) > 0:
             add_long_position(lt_symbol, lt_qty, lt_entry)
             st.success(f"✅ Added {lt_qty} {lt_symbol} @ ${lt_entry}")
@@ -1240,7 +1247,7 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # ==================== SIGNAL TRACKER STATS ====================
+    # SIGNAL TRACKER STATS
     st.subheader("📊 SIGNAL TRACKER")
     active_count = len(st.session_state.active_signals)
     closed_count = len(st.session_state.closed_signals)
@@ -1256,32 +1263,16 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # ==================== QUANTUM SETTINGS ====================
+    # QUANTUM SETTINGS
     st.subheader("🎯 QUANTUM SETTINGS")
-    min_quantum = st.slider("Min Quantum Score", 0, 300, 180, 10, key="slider_min_quantum")
-    min_ai = st.slider("Min AI Score", 0, 100, 60, 5, key="slider_min_ai")
+    min_quantum = st.slider("Min Quantum Score", 0, 300, 180, 10)
+    min_ai = st.slider("Min AI Score", 0, 100, 60, 5)
     
     st.info(f"📊 Current: Q≥{min_quantum} | AI≥{min_ai}")
     
     st.markdown("---")
     
-    # ==================== FEATURES ====================
-    st.subheader("🔬 FEATURES ACTIVE")
-    st.success("✅ Order Flow (ATAS)")
-    st.success("✅ Volume Profile")
-    st.success("✅ SFP Detection")
-    st.success("✅ Elliott Wave")
-    st.success("✅ SMC")
-    st.success("✅ Whale Detection")
-    st.success("✅ 80% Setup Filter")
-    st.success("✅ Telegram Alerts")
-    st.success("✅ Backtest Engine")
-    st.success("✅ Signal Tracker")
-    st.success("✅ Auto-Scan (30min)")
-    st.success("✅ Auto-Refresh (30s)")
-    
-    st.markdown("---")
-    st.caption("🥓 Bacon Trader Pro v4.4 ULTIMATE")
+    st.caption("🥓 Bacon Trader Pro v4.5")
     st.caption(f"⏰ {datetime.now().strftime('%H:%M:%S')}")
 
 # ==================== CHECK AUTO-SCAN ====================
@@ -1319,34 +1310,6 @@ with tab1:
     col5.metric("Total Positions", len(st.session_state.day_positions) + len(st.session_state.long_positions))
     
     st.markdown("---")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.subheader("🔍 Last Scan Info")
-        if st.session_state.last_scan_time:
-            st.write(f"⏰ Last scan: {st.session_state.last_scan_time}")
-            st.write(f"📊 Symbols: {st.session_state.last_scan_count}")
-            st.write(f"✅ Signals: {st.session_state.last_scan_signals}")
-        else:
-            st.info("No scans yet. Go to Quantum Scanner!")
-    
-    with col2:
-        st.subheader("⚙️ Current Settings")
-        st.write(f"📊 Min Quantum: {min_quantum}/300")
-        st.write(f"🤖 Min AI: {min_ai}/100")
-        st.write(f"📱 Telegram: {'ON ✅' if st.session_state.telegram_enabled else 'OFF 📴'}")
-    
-    with col3:
-        st.subheader("🎯 Active Signals")
-        st.metric("Tracking", len(st.session_state.active_signals))
-        st.metric("Closed", len(st.session_state.closed_signals))
-    
-    st.markdown("---")
-    
-    if st.session_state.auto_scan_enabled and len(st.session_state.auto_scan_results) > 0:
-        st.subheader("🔄 Last Auto-Scan Results")
-        st.dataframe(st.session_state.auto_scan_results, use_container_width=True)
     
     if len(st.session_state.active_signals) > 0:
         st.subheader("📊 Active Signals Summary")
@@ -1427,16 +1390,14 @@ with tab4:
     
     with col1:
         st.subheader("⚙️ Configuration")
-        market = st.selectbox("Select Market", list(MARKETS.keys()), key="select_market")
-        
-        show_80_only = st.checkbox("⭐ Show only 80% Setups", value=False, key="checkbox_80_setup")
+        market = st.selectbox("Select Market", list(MARKETS.keys()))
     
     with col2:
         st.metric("Symbols", len(MARKETS[market]))
         st.metric("Min Q", min_quantum)
         st.metric("Min AI", min_ai)
     
-    if st.button("🔥 QUANTUM SCAN", type="primary", use_container_width=True, key="btn_quantum_scan"):
+    if st.button("🔥 QUANTUM SCAN", type="primary", use_container_width=True):
         st.markdown("---")
         st.subheader(f"💎 Results: {market}")
         
@@ -1449,217 +1410,112 @@ with tab4:
             st.session_state.last_scan_signals = len(results)
         
         if len(results) > 0:
-            st.subheader("🔍 Optional Filters")
+            st.success(f"✅ Found {len(results)} signals!")
             
-            col1, col2, col3, col4 = st.columns(4)
+            col1, col2, col3 = st.columns(3)
             
             with col1:
-                tier_filter = st.multiselect(
-                    "Filter by Tier",
-                    ['💎 DIAMOND', '🥇 PLATINUM', '🥈 GOLD', '🥉 SILVER', '🔸 BRONZE'],
-                    default=[],
-                    key="multiselect_tier"
-                )
+                if st.button("📊 TRACK ALL VISIBLE", use_container_width=True):
+                    tracked = 0
+                    for _, row in results.iterrows():
+                        if add_signal_to_tracker(
+                            row['Symbol'], row['Entry'], row['Stop'],
+                            row['TP1'], row['TP2'], row['TP3'],
+                            row['Quantum'], row['AI'], row['Tier'],
+                            row['Flow'], row['RSI']
+                        ):
+                            tracked += 1
+                    if tracked > 0:
+                        st.success(f"✅ Tracked {tracked} new signals!")
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.info("ℹ️ All signals already tracked!")
             
             with col2:
-                flow_filter = st.multiselect(
-                    "Filter by Flow",
-                    ['BULLISH', 'NEUTRAL', 'BEARISH'],
-                    default=[],
-                    key="multiselect_flow"
-                )
+                if st.button("💎 TRACK DIAMOND/PLATINUM", use_container_width=True):
+                    tracked = 0
+                    for _, row in results[results['Tier'].isin(['💎 DIAMOND', '🥇 PLATINUM'])].iterrows():
+                        if add_signal_to_tracker(
+                            row['Symbol'], row['Entry'], row['Stop'],
+                            row['TP1'], row['TP2'], row['TP3'],
+                            row['Quantum'], row['AI'], row['Tier'],
+                            row['Flow'], row['RSI']
+                        ):
+                            tracked += 1
+                    if tracked > 0:
+                        st.success(f"✅ Tracked {tracked} premium signals!")
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.info("ℹ️ All premium signals already tracked!")
             
             with col3:
-                whale_only = st.checkbox("🐋 Whales Only", value=False, key="checkbox_whale")
+                csv = results.to_csv(index=False)
+                st.download_button(
+                    "💾 DOWNLOAD CSV",
+                    csv,
+                    "quantum_signals.csv",
+                    "text/csv",
+                    use_container_width=True
+                )
             
-            with col4:
-                setup_80_only = st.checkbox("⭐ 80% Setup Only", value=False, key="checkbox_80_only")
+            st.dataframe(results, use_container_width=True, hide_index=True)
             
-            filtered_results = results.copy()
+            st.subheader("📊 Individual Signal Actions")
             
-            if len(tier_filter) > 0:
-                filtered_results = filtered_results[filtered_results['Tier'].isin(tier_filter)]
-            
-            if len(flow_filter) > 0:
-                filtered_results = filtered_results[filtered_results['Flow'].isin(flow_filter)]
-            
-            if whale_only:
-                filtered_results = filtered_results[filtered_results['Whale'] == '🐋']
-            
-            if setup_80_only:
-                filtered_results = filtered_results[filtered_results['80% Setup'] == '⭐']
-            
-            st.markdown("---")
-            
-            if len(filtered_results) > 0:
-                st.success(f"✅ Showing {len(filtered_results)} of {len(results)} signals!")
-                
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    if st.button("📊 TRACK ALL VISIBLE", use_container_width=True, key="btn_track_all"):
-                        tracked = 0
-                        for _, row in filtered_results.iterrows():
-                            if add_signal_to_tracker(
-                                row['Symbol'], row['Entry'], row['Stop'],
-                                row['TP1'], row['TP2'], row['TP3'],
-                                row['Quantum'], row['AI'], row['Tier'],
-                                row['Flow'], row['RSI']
-                            ):
-                                tracked += 1
-                        if tracked > 0:
-                            st.success(f"✅ Tracked {tracked} new signals!")
-                            time.sleep(1)
-                            st.rerun()
+            for idx, row in results.iterrows():
+                with st.expander(f"{row['Tier']} {row['Symbol']} | Q:{row['Quantum']:.0f} AI:{row['AI']:.0f}"):
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.metric("Entry", f"${row['Entry']:.2f}")
+                        st.metric("Stop", f"${row['Stop']:.2f}")
+                    
+                    with col2:
+                        st.metric("TP1", f"${row['TP1']:.2f}")
+                        st.metric("TP2", f"${row['TP2']:.2f}")
+                    
+                    with col3:
+                        st.metric("TP3", f"${row['TP3']:.2f}")
+                        st.metric("RSI", f"{row['RSI']:.1f}")
+                    
+                    st.write(f"📈 Flow: {row['Flow']}")
+                    st.write(f"💡 Recommendation: {row['Recommendation']}")
+                    
+                    if row['Whale'] == '🐋':
+                        st.warning("🐋 WHALE ACTIVITY DETECTED!")
+                    
+                    if row['80% Setup'] == '⭐':
+                        st.success("⭐ 80% WIN RATE SETUP!")
+                    
+                    # BOUTON TRACK THIS SIGNAL - FIXED VERSION
+                    if st.button("📊 TRACK THIS SIGNAL", key=f"track_{row['Symbol']}_{idx}"):
+                        result = add_signal_to_tracker(
+                            row['Symbol'], row['Entry'], row['Stop'],
+                            row['TP1'], row['TP2'], row['TP3'],
+                            row['Quantum'], row['AI'], row['Tier'],
+                            row['Flow'], row['RSI']
+                        )
+                        
+                        if result:
+                            st.success(f"✅ Tracking {row['Symbol']}!")
                         else:
-                            st.info("ℹ️ All signals already tracked!")
-                
-                with col2:
-                    if st.button("💎 TRACK DIAMOND/PLATINUM", use_container_width=True, key="btn_track_premium"):
-                        tracked = 0
-                        for _, row in results[results['Tier'].isin(['💎 DIAMOND', '🥇 PLATINUM'])].iterrows():
-                            if add_signal_to_tracker(
-                                row['Symbol'], row['Entry'], row['Stop'],
-                                row['TP1'], row['TP2'], row['TP3'],
-                                row['Quantum'], row['AI'], row['Tier'],
-                                row['Flow'], row['RSI']
-                            ):
-                                tracked += 1
-                        if tracked > 0:
-                            st.success(f"✅ Tracked {tracked} premium signals!")
-                            time.sleep(1)
-                            st.rerun()
-                        else:
-                            st.info("ℹ️ All premium signals already tracked!")
-                
-                with col3:
-                    csv = filtered_results.to_csv(index=False)
-                    st.download_button(
-                        "💾 DOWNLOAD CSV",
-                        csv,
-                        "quantum_signals.csv",
-                        "text/csv",
-                        use_container_width=True,
-                        key="btn_download_csv"
-                    )
-                
-                st.dataframe(filtered_results, use_container_width=True, hide_index=True)
-                
-                st.subheader("📊 Individual Signal Actions")
-                
-                for idx, row in filtered_results.iterrows():
-                    with st.expander(f"{row['Tier']} {row['Symbol']} | Q:{row['Quantum']:.0f} AI:{row['AI']:.0f} | {row['Signal']}"):
-                        col1, col2, col3 = st.columns(3)
+                            st.warning(f"⚠️ {row['Symbol']} already tracked!")
                         
-                        with col1:
-                            st.metric("Entry", f"${row['Entry']:.2f}")
-                            st.metric("Stop", f"${row['Stop']:.2f}")
-                        
-                        with col2:
-                            st.metric("TP1", f"${row['TP1']:.2f}")
-                            st.metric("TP2", f"${row['TP2']:.2f}")
-                        
-                        with col3:
-                            st.metric("TP3", f"${row['TP3']:.2f}")
-                            st.metric("RSI", f"{row['RSI']:.1f}")
-                        
-                        st.write(f"📈 Flow: {row['Flow']}")
-                        st.write(f"💡 Recommendation: {row['Recommendation']}")
-                        
-                        if row['Whale'] == '🐋':
-                            st.warning("🐋 WHALE ACTIVITY DETECTED!")
-                        
-                        if row['80% Setup'] == '⭐':
-                            st.success("⭐ 80% WIN RATE SETUP!")
-                        
-                        col1, col2 = st.columns(2)
-                        
-                        with col1:
-                            if st.button("📊 TRACK THIS SIGNAL", key=f"track_{row['Symbol']}_{idx}"):
-                                if add_signal_to_tracker(
-                                    row['Symbol'], row['Entry'], row['Stop'],
-                                    row['TP1'], row['TP2'], row['TP3'],
-                                    row['Quantum'], row['AI'], row['Tier'],
-                                    row['Flow'], row['RSI']
-                                ):
-                                    st.success(f"✅ Tracking {row['Symbol']}!")
-                                    time.sleep(0.5)
-                                    st.rerun()
-                                else:
-                                    st.warning(f"⚠️ {row['Symbol']} already tracked!")
-                        
-                        with col2:
-                            if st.button("📱 SEND TO TELEGRAM", key=f"tg_{row['Symbol']}_{idx}"):
-                                msg = f"""
-🥓 <b>BACON TRADER PRO</b>
-
-{row['Tier']} <b>{row['Symbol']}</b>
-
-📊 Quantum: {row['Quantum']:.0f}/300
-🤖 AI: {row['AI']:.0f}/100
-
-💰 Entry: ${row['Entry']:.2f}
-🛑 Stop: ${row['Stop']:.2f}
-🎯 TP1: ${row['TP1']:.2f} | TP2: ${row['TP2']:.2f} | TP3: ${row['TP3']:.2f}
-
-📈 Flow: {row['Flow']}
-📊 RSI: {row['RSI']:.1f}
-{('🐋 WHALE!' if row['Whale'] == '🐋' else '')}
-{('⭐ 80% SETUP!' if row['80% Setup'] == '⭐' else '')}
-
-⚡ {row['Recommendation']}
-                                """
-                                if send_telegram_alert(msg):
-                                    st.success("✅ Sent to Telegram!")
-                                else:
-                                    st.error("❌ Failed to send!")
-            else:
-                st.warning(f"⚠️ No signals match your filters! Try removing some filters.")
-                st.info(f"💡 Total signals found: {len(results)} (before filters)")
-                
-                if st.button("🔄 CLEAR ALL FILTERS", type="primary"):
-                    st.rerun()
+                        # FORCE RERUN DANS TOUS LES CAS
+                        time.sleep(0.3)
+                        st.rerun()
         else:
-            st.warning("📊 No signals found matching your criteria!")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.info(f"""
-                **Current Settings:**
-                - Min Quantum: {min_quantum}/300
-                - Min AI: {min_ai}/100
-                - Market: {market}
-                
-                **Try:**
-                - Lower thresholds in sidebar
-                - Scan during market hours (9:30-16:00 EST)
-                - Try different markets (TOP 10, TOP 50)
-                """)
-            
-            with col2:
-                st.success(f"""
-                **Scan Statistics:**
-                - Symbols scanned: {len(symbols)}
-                - Time: {datetime.now().strftime('%H:%M:%S')}
-                - Status: Complete ✅
-                
-                **Markets Open:**
-                - 🇺🇸 NYSE: 9:30-16:00 EST
-                - 🇺🇸 NASDAQ: 9:30-16:00 EST
-                - ₿ CRYPTO: 24/7
-                """)
-            
-            if st.button("🔧 AUTO-FIX: Lower Thresholds", type="primary", key="auto_fix_btn"):
-                st.info("💡 Go to sidebar and lower: Quantum to 150 | AI to 50")
+            st.warning("📊 No signals found!")
 
 # TAB 5: SMART MONEY
 with tab5:
     st.header("🧠 SMART MONEY CONCEPTS")
     
-    symbol_smc = st.text_input("Enter Symbol for SMC Analysis", "AAPL", key="input_smc_symbol").upper()
+    symbol_smc = st.text_input("Enter Symbol for SMC Analysis", "AAPL").upper()
     
-    if st.button("🔍 ANALYZE SMC", type="primary", use_container_width=True, key="btn_analyze_smc"):
+    if st.button("🔍 ANALYZE SMC", type="primary", use_container_width=True):
         df = get_live_data(symbol_smc, "6mo", "1d")
         
         if df is not None and len(df) > 50:
@@ -1691,50 +1547,8 @@ with tab5:
                 st.metric("POC", f"${analysis['volume_profile']['poc']:.2f}")
                 st.metric("VAH", f"${analysis['volume_profile']['vah']:.2f}")
                 st.metric("VAL", f"${analysis['volume_profile']['val']:.2f}")
-            
-            st.markdown("---")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.subheader("🎯 Market Structure")
-                st.metric("Structure", analysis['smc']['structure'])
-                st.metric("Bias", analysis['smc']['bias'])
-                
-                if len(analysis['smc']['order_blocks']) > 0:
-                    st.write("**Order Blocks:**")
-                    for ob in analysis['smc']['order_blocks'][:3]:
-                        st.write(f"• {ob['type']}: ${ob['bottom']:.2f} - ${ob['top']:.2f}")
-            
-            with col2:
-                st.subheader("🌊 Elliott Wave")
-                st.metric("Wave Count", analysis['elliott']['wave_count'])
-                st.metric("Direction", analysis['elliott']['direction'])
-                st.metric("Confidence", f"{analysis['elliott']['confidence']:.0f}%")
-            
-            st.markdown("---")
-            
-            if len(analysis['sfp_signals']) > 0:
-                st.subheader("💎 SFP Signals (Recent)")
-                for sfp in analysis['sfp_signals'][-3:]:
-                    st.write(f"• {sfp['type']} @ ${sfp['price']:.2f} | Level: ${sfp['level']:.2f} | Score: {sfp['score']}/100")
-            
-            st.markdown("---")
-            
-            if analysis['setup_80']['valid']:
-                st.markdown(f"""
-                <div class="setup-80">
-                    ⭐ <b>80% WIN RATE SETUP DETECTED!</b><br>
-                    Score: {analysis['setup_80']['score']}/100<br>
-                    Confidence: {analysis['setup_80']['confidence']}
-                </div>
-                """, unsafe_allow_html=True)
-                
-                st.subheader("✅ Setup Validation:")
-                for reason in analysis['setup_80']['reasons']:
-                    st.write(reason)
         else:
-            st.error("❌ Unable to fetch data. Try another symbol.")
+            st.error("❌ Unable to fetch data.")
 
 # TAB 6: BACKTEST
 with tab6:
@@ -1743,15 +1557,15 @@ with tab6:
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        bt_symbol = st.text_input("Symbol to Backtest", "AAPL", key="input_bt_symbol").upper()
+        bt_symbol = st.text_input("Symbol to Backtest", "AAPL").upper()
     
     with col2:
-        bt_period = st.selectbox("Period", ["3mo", "6mo", "1y", "2y"], index=1, key="select_bt_period")
+        bt_period = st.selectbox("Period", ["3mo", "6mo", "1y", "2y"], index=1)
     
     with col3:
-        bt_capital = st.number_input("Initial Capital", min_value=1000, max_value=1000000, value=10000, step=1000, key="input_bt_capital")
+        bt_capital = st.number_input("Initial Capital", min_value=1000, max_value=1000000, value=10000, step=1000)
     
-    if st.button("🚀 RUN BACKTEST", type="primary", use_container_width=True, key="btn_run_backtest"):
+    if st.button("🚀 RUN BACKTEST", type="primary", use_container_width=True):
         with st.spinner(f"Running backtest on {bt_symbol}..."):
             backtest_results = run_backtest(bt_symbol, bt_period, bt_capital)
         
@@ -1771,72 +1585,28 @@ with tab6:
             
             st.markdown("---")
             
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Wins", stats['Wins'])
-            col2.metric("Losses", stats['Losses'])
-            col3.metric("Avg Win", f"${stats['Avg Win']:.2f}")
-            col4.metric("Avg Loss", f"${stats['Avg Loss']:.2f}")
-            
-            st.markdown("---")
-            
-            col1, col2 = st.columns(2)
-            col1.metric("Initial Capital", f"${bt_capital:,.2f}")
-            col2.metric("Final Balance", f"${stats['Final Balance']:,.2f}", f"{stats['Total P&L%']:.2f}%")
-            
-            st.metric("Max Drawdown", f"{stats['Max Drawdown']:.2f}%")
-            
-            st.markdown("---")
-            
-            st.subheader("📈 Equity Curve")
-            
-            equity_df = pd.DataFrame({
-                'Date': backtest_results['dates'],
-                'Equity': backtest_results['equity_curve']
-            })
-            
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=equity_df['Date'],
-                y=equity_df['Equity'],
-                mode='lines',
-                name='Equity',
-                line=dict(color='#ff8c00', width=2)
-            ))
-            
-            fig.update_layout(
-                title=f"{bt_symbol} Backtest - Equity Curve",
-                xaxis_title="Date",
-                yaxis_title="Equity ($)",
-                template="plotly_dark",
-                height=500
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
-            
-            st.markdown("---")
-            
             st.subheader("📊 Trade History")
             st.dataframe(backtest_results['trades'], use_container_width=True, hide_index=True)
-            
-            csv_trades = backtest_results['trades'].to_csv(index=False)
-            st.download_button(
-                "💾 DOWNLOAD TRADES CSV",
-                csv_trades,
-                f"{bt_symbol}_backtest_{bt_period}.csv",
-                "text/csv",
-                use_container_width=True,
-                key="btn_download_bt"
-            )
         else:
-            st.error("❌ Backtest failed. Not enough data or invalid symbol.")
+            st.error("❌ Backtest failed.")
 
 # TAB 7: SIGNAL TRACKER
 with tab7:
     st.header("📊 SIGNAL TRACKER")
     
+    # DEBUG INFO
+    with st.expander("🔧 DEBUG INFO"):
+        st.write(f"**Active Signals in Memory:** {len(st.session_state.active_signals)}")
+        st.write(f"**Closed Signals in Memory:** {len(st.session_state.closed_signals)}")
+        
+        if len(st.session_state.active_signals) > 0:
+            st.write("**Active Signals List:**")
+            for sig in st.session_state.active_signals:
+                st.write(f"- {sig['symbol']} @ ${sig['entry_price']:.2f} ({sig['tier']})")
+    
     update_signal_status()
     
-    if st.button("🔄 REFRESH SIGNALS", use_container_width=True, key="btn_refresh_signals"):
+    if st.button("🔄 REFRESH SIGNALS", use_container_width=True):
         update_signal_status()
         st.success("✅ Signals updated!")
         st.rerun()
@@ -1936,8 +1706,7 @@ with tab7:
                 csv_closed,
                 "closed_trades.csv",
                 "text/csv",
-                use_container_width=True,
-                key="btn_download_closed"
+                use_container_width=True
             )
             
             if st.button("🗑️ CLEAR ALL CLOSED TRADES", type="secondary"):
@@ -1948,5 +1717,5 @@ with tab7:
 
 # ==================== FOOTER ====================
 st.markdown("---")
-st.caption("🥓 Bacon Trader Pro v4.4 ULTIMATE | Made with 🔥 by WeBacon ")
+st.caption("🥓 Bacon Trader Pro v4.5 ULTIMATE | Signal Tracker FIXED")
 st.caption(f"⏰ Last Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S EST')}")
