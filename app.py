@@ -78,8 +78,10 @@ if 'last_update' not in st.session_state:
 
 # ==================== SIGNAL TRACKER FUNCTIONS ====================
 def add_signal_to_tracker(symbol, entry, stop, tp1, tp2, tp3, quantum_score, ai_score, tier, flow, rsi):
-    """Ajoute un signal au tracker"""
+    """Ajoute un signal au tracker - Version améliorée"""
+    
     try:
+        # Vérifie si le signal existe déjà (ACTIVE seulement)
         exists = any(s['symbol'] == symbol and s['status'] == 'ACTIVE' for s in st.session_state.active_signals)
         
         if exists:
@@ -108,6 +110,7 @@ def add_signal_to_tracker(symbol, entry, stop, tp1, tp2, tp3, quantum_score, ai_
         
         st.session_state.active_signals.append(signal)
         
+        # Envoie notification Telegram pour Diamond/Platinum
         if st.session_state.telegram_enabled and tier in ['💎 DIAMOND', '🥇 PLATINUM']:
             msg = f"""
 🥓 <b>SIGNAL TRACKED!</b>
@@ -229,11 +232,10 @@ MARKETS = {
         "WFC", "DHR", "VZ", "TXN", "PM", "QCOM", "NEE", "IBM", "HON", "UNP"
     ],
     
-    "🚀 NASDAQ 100": [
-        "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "GOOG", "TSLA", "AVGO", "NFLX",
-        "COST", "AMD", "ADBE", "CSCO", "PEP", "QCOM", "INTC", "TXN", "CMCSA", "INTU",
-        "AMGN", "AMAT", "HON", "ISRG", "BKNG", "PANW", "ADP", "MU", "LRCX", "KLAC",
-        "REGN", "GILD", "VRTX", "SNPS", "CDNS", "MRVL", "PYPL", "CRWD", "ABNB", "FTNT"
+    "🇺🇸 DOW 30": [
+        "AAPL", "MSFT", "AMZN", "UNH", "JNJ", "V", "JPM", "WMT", "PG", "HD",
+        "CVX", "MRK", "DIS", "CSCO", "NKE", "MCD", "VZ", "INTC", "KO", "CRM",
+        "IBM", "AXP", "CAT", "GS", "HON", "BA", "TRV", "MMM", "WBA", "DOW"
     ],
     
     "₿ CRYPTO TOP 20": [
@@ -441,7 +443,7 @@ def detect_elliott_wave(df):
         if len(pivots) < 5:
             return {'wave_count': 0, 'direction': 'NEUTRAL', 'confidence': 0}
         
-        wave_count = len(pivots) // 2
+        wave_count = len([i for i in range(len(pivots)-1) if pivots[i]['type'] != pivots[i+1]['type']]) // 2
         
         return {'wave_count': wave_count, 'direction': 'IN_PROGRESS', 'confidence': 40}
     except:
@@ -500,7 +502,7 @@ def detect_market_structure(df):
     except:
         return {'structure': 'NEUTRAL', 'bias': 'NEUTRAL', 'order_blocks': []}
 
-# ==================== 80% SETUP ====================
+# ==================== SETUP 80% ====================
 def check_80_percent_setup(df, analysis):
     """Setup 80% Win Rate"""
     try:
@@ -512,7 +514,7 @@ def check_80_percent_setup(df, analysis):
         
         if analysis['quantum_score'] >= 260:
             score += 20
-            reasons.append("✅ Quantum >= 260")
+            reasons.append("✅ Quantum Score >= 260")
         else:
             reasons.append(f"❌ Quantum {analysis['quantum_score']:.0f} < 260")
         
@@ -526,7 +528,7 @@ def check_80_percent_setup(df, analysis):
             score += 15
             reasons.append(f"✅ RSI {analysis['rsi']:.1f} optimal")
         else:
-            reasons.append(f"❌ RSI {analysis['rsi']:.1f}")
+            reasons.append(f"❌ RSI {analysis['rsi']:.1f} out of range")
         
         ema9 = df['Close'].ewm(span=9).mean().iloc[-1]
         ema21 = df['Close'].ewm(span=21).mean().iloc[-1]
@@ -534,7 +536,7 @@ def check_80_percent_setup(df, analysis):
         
         if analysis['current_price'] > ema9 > ema21 > ema50:
             score += 15
-            reasons.append("✅ EMA alignment")
+            reasons.append("✅ Price > EMA9 > EMA21 > EMA50")
         else:
             reasons.append("❌ EMA alignment failed")
         
@@ -542,15 +544,25 @@ def check_80_percent_setup(df, analysis):
             score += 10
             reasons.append(f"✅ Volume {analysis['order_flow']['vol_ratio']:.1f}x")
         else:
-            reasons.append(f"❌ Volume low")
+            reasons.append(f"❌ Volume {analysis['order_flow']['vol_ratio']:.1f}x < 2x")
+        
+        near_poc = abs(analysis['current_price'] - analysis['volume_profile']['poc']) / analysis['current_price'] < 0.02
+        has_bullish_sfp = len(analysis['sfp_signals']) > 0 and analysis['sfp_signals'][-1]['type'] == 'BULLISH_SFP'
+        
+        if near_poc or has_bullish_sfp:
+            score += 10
+            if near_poc:
+                reasons.append("✅ Near POC support")
+            if has_bullish_sfp:
+                reasons.append("✅ Bullish SFP detected")
+        else:
+            reasons.append("❌ No POC/SFP confirmation")
         
         if analysis['smc']['bias'] == 'BUY':
             score += 10
-            reasons.append("✅ Bullish structure")
+            reasons.append("✅ Bullish Market Structure")
         else:
-            reasons.append("❌ Neutral/Bearish")
-        
-        score += 10
+            reasons.append("❌ Neutral/Bearish structure")
         
         valid = score >= 80
         
@@ -561,7 +573,1033 @@ def check_80_percent_setup(df, analysis):
             'confidence': 'ULTRA HIGH' if score >= 90 else 'HIGH'
         }
     except:
-        return {'valid': False, 'score': 0, 'reasons': ['Error']}
+        return {'valid': False, 'score': 0, 'reasons': ['Error in calculation']}
+
+# ==================== QUANTUM AI SCORE ====================
+def calculate_quantum_ai_score(df, symbol=""):
+    if df is None or len(df) < 50:
+        return {
+            'quantum_score': 0, 'ai_score': 0, 'recommendation': 'WAIT', 'signal': '⚫',
+            'confidence': 'LOW', 'tier': 'BRONZE', 'whale_alert': False,
+            'atr': 0, 'rsi': 50, 'current_price': 0, 'setup_80': {'valid': False, 'score': 0}
+        }
+    
+    try:
+        atr = calculate_atr(df, 14)
+        rsi = calculate_rsi(df, 14)
+        macd, macd_signal, macd_hist = calculate_macd(df)
+        current_price = float(df['Close'].iloc[-1])
+        
+        order_flow = calculate_order_flow_advanced(df)
+        volume_profile = calculate_volume_profile(df)
+        sfp_signals = detect_sfp(df)
+        elliott = detect_elliott_wave(df)
+        smc = detect_market_structure(df)
+        
+        sma_20 = df['Close'].rolling(20).mean().iloc[-1]
+        sma_50 = df['Close'].rolling(50).mean().iloc[-1] if len(df) >= 50 else sma_20
+        
+        trend_score = 100 if current_price > sma_20 > sma_50 else (70 if current_price > sma_20 else 30)
+        rsi_score = 100 if 45 <= rsi <= 55 else (80 if 40 <= rsi <= 60 else 50)
+        macd_score = 100 if macd > macd_signal and macd_hist > 0 else 40
+        
+        vol_avg = df['Volume'].rolling(20).mean().iloc[-1]
+        vol_current = df['Volume'].iloc[-1]
+        vol_ratio = (vol_current / vol_avg) if vol_avg > 0 else 1
+        volume_score = min(vol_ratio * 50, 100)
+        
+        flow_score = order_flow['flow_score']
+        
+        poc_distance = abs(current_price - volume_profile['poc']) / current_price if volume_profile['poc'] > 0 else 0
+        vp_score = 100 if poc_distance < 0.02 else 70
+        
+        sfp_score = 100 if len(sfp_signals) > 0 and sfp_signals[-1]['type'] == 'BULLISH_SFP' else 50
+        elliott_score = elliott['confidence']
+        smc_score = 100 if smc['bias'] == 'BUY' else (50 if smc['bias'] == 'NEUTRAL' else 20)
+        
+        quantum_ai = (
+            trend_score * 0.15 +
+            rsi_score * 0.10 +
+            macd_score * 0.10 +
+            volume_score * 0.15 +
+            flow_score * 0.15 +
+            vp_score * 0.10 +
+            sfp_score * 0.10 +
+            elliott_score * 0.05 +
+            smc_score * 0.10
+        )
+        
+        momentum = ((current_price / df['Close'].iloc[-5]) - 1) * 100 if len(df) >= 5 else 0
+        quantum_score = (quantum_ai / 100) * 250 + min(max(momentum * 5, -50), 50)
+        quantum_score = min(max(quantum_score, 0), 300)
+        
+        if quantum_score >= 250:
+            tier = '💎 DIAMOND'
+        elif quantum_score >= 220:
+            tier = '🥇 PLATINUM'
+        elif quantum_score >= 200:
+            tier = '🥈 GOLD'
+        elif quantum_score >= 180:
+            tier = '🥉 SILVER'
+        else:
+            tier = '🔸 BRONZE'
+        
+        if quantum_ai >= 85 and order_flow['imbalance'] == 'BULLISH':
+            recommendation, signal, confidence = 'STRONG BUY', '🟢', 'VERY HIGH'
+        elif quantum_ai >= 70:
+            recommendation, signal, confidence = 'BUY', '🟢', 'HIGH'
+        elif quantum_ai >= 55:
+            recommendation, signal, confidence = 'HOLD', '🟡', 'MEDIUM'
+        elif quantum_ai >= 40:
+            recommendation, signal, confidence = 'WAIT', '🟠', 'LOW'
+        else:
+            recommendation, signal, confidence = 'AVOID', '🔴', 'VERY LOW'
+        
+        result = {
+            'quantum_score': round(quantum_score, 1),
+            'ai_score': round(quantum_ai, 1),
+            'recommendation': recommendation,
+            'signal': signal,
+            'confidence': confidence,
+            'tier': tier,
+            'whale_alert': order_flow['whale_detected'],
+            'atr': atr,
+            'rsi': rsi,
+            'current_price': current_price,
+            'order_flow': order_flow,
+            'volume_profile': volume_profile,
+            'sfp_signals': sfp_signals,
+            'elliott': elliott,
+            'smc': smc
+        }
+        
+        result['setup_80'] = check_80_percent_setup(df, result)
+        
+        return result
+    
+    except:
+        return {
+            'quantum_score': 0, 'ai_score': 0, 'recommendation': 'ERROR', 'signal': '⚫',
+            'confidence': 'LOW', 'tier': 'BRONZE', 'whale_alert': False,
+            'atr': 0, 'rsi': 50, 'current_price': 0, 'setup_80': {'valid': False, 'score': 0}
+        }
+
+def calculate_targets(entry, atr, ai_score):
+    stop = round(entry - (atr * 2.0), 2)
+    risk = entry - stop
+    
+    if ai_score >= 80:
+        tp1, tp2, tp3 = round(entry + risk * 1.2, 2), round(entry + risk * 2.0, 2), round(entry + risk * 3.5, 2)
+    elif ai_score >= 65:
+        tp1, tp2, tp3 = round(entry + risk * 1.0, 2), round(entry + risk * 1.8, 2), round(entry + risk * 3.0, 2)
+    else:
+        tp1, tp2, tp3 = round(entry + risk * 0.8, 2), round(entry + risk * 1.5, 2), round(entry + risk * 2.5, 2)
+    
+    return stop, tp1, tp2, tp3
+
+# ==================== SCANNER ====================
+def scan_market_quantum(symbols, min_score=180, min_ai=60, show_progress=True):
+    results = []
+    scanned = 0
+    signals_found = 0
+    errors = 0
+    
+    if show_progress:
+        progress_bar = st.progress(0)
+        status = st.empty()
+        stats = st.empty()
+    
+    for i, symbol in enumerate(symbols):
+        if show_progress:
+            status.text(f"🔍 Quantum Scanning {symbol}... ({i+1}/{len(symbols)})")
+            stats.info(f"📊 Scanned: {scanned} | Signals: {signals_found} | Errors: {errors}")
+        
+        try:
+            df = get_live_data(symbol, period="3mo", interval="1d")
+            scanned += 1
+            
+            if df is not None and len(df) > 50:
+                analysis = calculate_quantum_ai_score(df, symbol)
+                
+                if analysis['quantum_score'] >= min_score and analysis['ai_score'] >= min_ai:
+                    signals_found += 1
+                    
+                    stop, tp1, tp2, tp3 = calculate_targets(
+                        analysis['current_price'],
+                        analysis['atr'],
+                        analysis['ai_score']
+                    )
+                    
+                    if analysis['tier'] in ['💎 DIAMOND', '🥇 PLATINUM'] and st.session_state.telegram_enabled:
+                        last_sent = st.session_state.last_telegram_sent.get(symbol, 0)
+                        time_since = time.time() - last_sent
+                        
+                        if time_since > 3600:
+                            telegram_msg = f"""
+🥓 <b>BACON TRADER PRO ALERT</b>
+
+{analysis['tier']} <b>{symbol}</b>
+
+📊 Quantum Score: {analysis['quantum_score']:.0f}/300
+🤖 AI Score: {analysis['ai_score']:.0f}/100
+
+💰 Entry: ${analysis['current_price']:.2f}
+🛑 Stop: ${stop}
+🎯 TP1: ${tp1} | TP2: ${tp2} | TP3: ${tp3}
+
+📈 Flow: {analysis['order_flow']['imbalance']}
+📊 RSI: {analysis['rsi']:.1f}
+{'🐋 WHALE DETECTED!' if analysis['whale_alert'] else ''}
+
+⚡ {analysis['recommendation']}
+                            """
+                            
+                            if send_telegram_alert(telegram_msg):
+                                st.session_state.last_telegram_sent[symbol] = time.time()
+                    
+                    results.append({
+                        'Time': datetime.now().strftime("%H:%M"),
+                        'Symbol': symbol,
+                        'Quantum': analysis['quantum_score'],
+                        'AI': analysis['ai_score'],
+                        'Tier': analysis['tier'],
+                        'Signal': analysis['signal'],
+                        'Entry': round(analysis['current_price'], 2),
+                        'Stop': stop,
+                        'TP1': tp1,
+                        'TP2': tp2,
+                        'TP3': tp3,
+                        'RSI': round(analysis['rsi'], 1),
+                        'Flow': analysis['order_flow']['imbalance'],
+                        'Whale': '🐋' if analysis['whale_alert'] else '',
+                        '80% Setup': '⭐' if analysis['setup_80']['valid'] else '',
+                        'Recommendation': analysis['recommendation']
+                    })
+        except Exception as e:
+            errors += 1
+        
+        if show_progress:
+            progress_bar.progress((i + 1) / len(symbols))
+        time.sleep(0.05)
+    
+    if show_progress:
+        progress_bar.empty()
+        status.empty()
+        stats.empty()
+        
+        st.success(f"✅ Scan Complete! Scanned: {scanned} | Signals Found: {signals_found} | Errors: {errors}")
+    
+    return pd.DataFrame(results)
+
+# ==================== AUTO-SCAN ====================
+def run_auto_scan():
+    """Lance un auto-scan toutes les 30 minutes"""
+    symbols = MARKETS["⭐ TOP 50 US"]
+    results = scan_market_quantum(symbols, min_score=240, min_ai=80, show_progress=False)
+    
+    if len(results) > 0:
+        st.session_state.auto_scan_results = results
+        st.session_state.last_auto_scan = datetime.now()
+        
+        for _, row in results.iterrows():
+            if row['Tier'] in ['💎 DIAMOND', '🥇 PLATINUM']:
+                add_signal_to_tracker(
+                    row['Symbol'], row['Entry'], row['Stop'],
+                    row['TP1'], row['TP2'], row['TP3'],
+                    row['Quantum'], row['AI'], row['Tier'],
+                    row['Flow'], row['RSI']
+                )
+
+# ==================== BACKTEST ====================
+def run_backtest(symbol, period="6mo", initial_capital=10000):
+    """Backtest Engine Complet"""
+    df = get_live_data(symbol, period=period, interval="1d")
+    
+    if df is None or len(df) < 60:
+        return None
+    
+    trades = []
+    equity_curve = [initial_capital]
+    balance = initial_capital
+    position = None
+    
+    for i in range(60, len(df)):
+        df_slice = df.iloc[:i+1]
+        analysis = calculate_quantum_ai_score(df_slice, symbol)
+        
+        current_price = df_slice['Close'].iloc[-1]
+        date = df_slice.index[-1]
+        
+        if position is None:
+            if analysis['recommendation'] in ['STRONG BUY', 'BUY'] and analysis['quantum_score'] >= 220:
+                stop, tp1, tp2, tp3 = calculate_targets(current_price, analysis['atr'], analysis['ai_score'])
+                
+                risk_amount = balance * 0.02
+                risk_per_share = current_price - stop
+                
+                if risk_per_share > 0:
+                    qty = int(risk_amount / risk_per_share)
+                    
+                    if qty > 0:
+                        position = {
+                            'entry': current_price,
+                            'stop': stop,
+                            'tp1': tp1,
+                            'tp2': tp2,
+                            'tp3': tp3,
+                            'entry_date': date,
+                            'qty': qty,
+                            'ai_score': analysis['ai_score'],
+                            'tier': analysis['tier']
+                        }
+        
+        elif position is not None:
+            exit_reason = None
+            exit_price = current_price
+            
+            if current_price >= position['tp3']:
+                exit_reason, exit_price = 'TP3', position['tp3']
+            elif current_price >= position['tp2']:
+                exit_reason, exit_price = 'TP2', position['tp2']
+            elif current_price >= position['tp1']:
+                exit_reason, exit_price = 'TP1', position['tp1']
+            elif current_price <= position['stop']:
+                exit_reason, exit_price = 'STOP', position['stop']
+            elif (i - df.index.get_loc(position['entry_date'])) > 20:
+                exit_reason = 'TIME'
+            
+            if exit_reason:
+                pnl = (exit_price - position['entry']) * position['qty']
+                pnl_pct = ((exit_price / position['entry']) - 1) * 100
+                balance += pnl
+                
+                trades.append({
+                    'Entry Date': position['entry_date'].strftime('%Y-%m-%d'),
+                    'Exit Date': date.strftime('%Y-%m-%d'),
+                    'Entry': round(position['entry'], 2),
+                    'Exit': round(exit_price, 2),
+                    'Qty': position['qty'],
+                    'Exit Reason': exit_reason,
+                    'Tier': position['tier'],
+                    'AI Score': position['ai_score'],
+                    'P&L': round(pnl, 2),
+                    'P&L%': round(pnl_pct, 2),
+                    'Result': 'WIN' if pnl > 0 else 'LOSS'
+                })
+                
+                position = None
+        
+        equity_curve.append(balance)
+    
+    trades_df = pd.DataFrame(trades)
+    
+    if len(trades_df) > 0:
+        wins = len(trades_df[trades_df['Result'] == 'WIN'])
+        losses = len(trades_df[trades_df['Result'] == 'LOSS'])
+        win_rate = (wins / len(trades_df)) * 100
+        
+        avg_win = trades_df[trades_df['Result'] == 'WIN']['P&L'].mean() if wins > 0 else 0
+        avg_loss = trades_df[trades_df['Result'] == 'LOSS']['P&L'].mean() if losses > 0 else 0
+        
+        profit_factor = abs(avg_win * wins / (avg_loss * losses)) if losses > 0 and avg_loss != 0 else 0
+        
+        total_pnl = trades_df['P&L'].sum()
+        total_pnl_pct = ((balance - initial_capital) / initial_capital) * 100
+        
+        equity_series = pd.Series(equity_curve)
+        running_max = equity_series.expanding().max()
+        drawdown = (equity_series - running_max) / running_max * 100
+        max_drawdown = drawdown.min()
+        
+        returns = equity_series.pct_change().dropna()
+        sharpe = (returns.mean() / returns.std()) * np.sqrt(252) if returns.std() > 0 else 0
+        
+        stats = {
+            'Total Trades': len(trades_df),
+            'Wins': wins,
+            'Losses': losses,
+            'Win Rate': win_rate,
+            'Profit Factor': profit_factor,
+            'Total P&L': total_pnl,
+            'Total P&L%': total_pnl_pct,
+            'Avg Win': avg_win,
+            'Avg Loss': avg_loss,
+            'Max Drawdown': max_drawdown,
+            'Sharpe Ratio': sharpe,
+            'Final Balance': balance
+        }
+        
+        return {
+            'trades': trades_df,
+            'stats': stats,
+            'equity_curve': equity_curve,
+            'dates': df.index[:len(equity_curve)]
+        }
+    
+    return None
+
+# ==================== PORTFOLIO ====================
+def get_current_price(symbol):
+    df = get_live_data(symbol, '5d', '1d')
+    if df is not None and len(df) > 0:
+        return float(df['Close'].iloc[-1])
+    return 0
+
+def add_day_position(symbol, qty, entry):
+    st.session_state.day_positions.append({
+        'symbol': symbol,
+        'qty': qty,
+        'entry': entry,
+        'date': datetime.now().strftime('%Y-%m-%d %H:%M')
+    })
+
+def add_long_position(symbol, qty, entry):
+    st.session_state.long_positions.append({
+        'symbol': symbol,
+        'qty': qty,
+        'entry': entry,
+        'date': datetime.now().strftime('%Y-%m-%d')
+    })
+
+def remove_position(position_type, index):
+    if position_type == 'day':
+        st.session_state.day_positions.pop(index)
+    else:
+        st.session_state.long_positions.pop(index)
+
+def get_portfolio_with_live_prices(position_type='day'):
+    positions = st.session_state.day_positions if position_type == 'day' else st.session_state.long_positions
+    
+    if len(positions) == 0:
+        return pd.DataFrame()
+    
+    results = []
+    
+    for pos in positions:
+        current_price = get_current_price(pos['symbol'])
+        
+        if current_price > 0:
+            pnl = (current_price - pos['entry']) * pos['qty']
+            pnl_pct = ((current_price / pos['entry']) - 1) * 100
+            
+            df = get_live_data(pos['symbol'], '1mo', '1d')
+            atr = calculate_atr(df, 14) if df is not None else 0
+            
+            stop = round(pos['entry'] - (atr * 2.0), 2) if atr > 0 else round(pos['entry'] * 0.98, 2)
+            
+            if current_price <= stop:
+                status = '🔴'
+            elif pnl_pct > 5:
+                status = '🟢'
+            elif pnl_pct > 0:
+                status = '🟡'
+            else:
+                status = '🟠'
+            
+            results.append({
+                'Symbol': pos['symbol'],
+                'Qty': pos['qty'],
+                'Entry': f"${pos['entry']:.2f}",
+                'Current': f"${current_price:.2f}",
+                'Stop': f"${stop:.2f}",
+                'P&L': f"${pnl:.2f}",
+                'P&L%': f"{pnl_pct:+.2f}%",
+                'Status': status,
+                'Date': pos['date']
+            })
+    
+    return pd.DataFrame(results)
+
+def calculate_portfolio_stats(position_type='day'):
+    positions = st.session_state.day_positions if position_type == 'day' else st.session_state.long_positions
+    
+    if len(positions) == 0:
+        return {'total_value': 0, 'total_pnl': 0, 'total_pnl_pct': 0}
+    
+    total_invested = 0
+    total_current = 0
+    
+    for pos in positions:
+        current_price = get_current_price(pos['symbol'])
+        if current_price > 0:
+            total_invested += pos['entry'] * pos['qty']
+            total_current += current_price * pos['qty']
+    
+    total_pnl = total_current - total_invested
+    total_pnl_pct = (total_pnl / total_invested * 100) if total_invested > 0 else 0
+    
+    return {
+        'total_value': total_current,
+        'total_pnl': total_pnl,
+        'total_pnl_pct': total_pnl_pct
+    }
+
+# ==================== THEME ====================
+st.markdown("""
+<style>
+    .stApp {
+        background: linear-gradient(135deg, #0a0a0a 0%, #1a1410 100%);
+        color: #ff8c00;
+        font-family: 'Courier New', monospace;
+    }
+    div[data-testid="stMetricValue"] {
+        font-size: 28px;
+        color: #ff8c00;
+        font-weight: bold;
+        text-shadow: 0 0 10px #ff8c00;
+    }
+    .diamond-signal {
+        background: linear-gradient(135deg, rgba(0,255,255,0.3) 0%, rgba(138,43,226,0.4) 100%);
+        border: 4px solid cyan;
+        padding: 20px;
+        border-radius: 15px;
+        color: white;
+        font-weight: bold;
+        margin: 10px 0;
+        box-shadow: 0 0 20px cyan;
+    }
+    .setup-80 {
+        background: linear-gradient(135deg, rgba(255,215,0,0.3) 0%, rgba(255,140,0,0.4) 100%);
+        border: 4px solid gold;
+        padding: 20px;
+        border-radius: 15px;
+        color: white;
+        font-weight: bold;
+        margin: 10px 0;
+        box-shadow: 0 0 20px gold;
+    }
+    .whale-alert {
+        background: linear-gradient(135deg, rgba(255,0,255,0.3) 0%, rgba(255,100,255,0.4) 100%);
+        border: 3px solid magenta;
+        padding: 15px;
+        border-radius: 10px;
+        color: white;
+        font-weight: bold;
+        margin: 10px 0;
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ==================== HEADER ====================
+col1, col2, col3 = st.columns([1, 6, 2])
+with col1:
+    st.markdown("# 🥓")
+with col2:
+    st.markdown("# BACON TRADER PRO")
+    st.caption("⚡ QUANTUM ULTIMATE v4.4 | ⭐ 80% Setup | 📱 Telegram | 🧪 Backtest | 🔄 AUTO-SCAN")
+with col3:
+    now = datetime.now()
+    market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
+    market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
+    
+    if market_open <= now <= market_close and now.weekday() < 5:
+        st.metric("Market", "OPEN 🟢")
+    else:
+        st.metric("Market", "CLOSED 🔴")
+
+st.markdown("---")
+
+# ==================== AUTO-REFRESH ====================
+current_time = time.time()
+if current_time - st.session_state.last_update > 30:
+    update_signal_status()
+    st.session_state.last_update = current_time
+
+# ==================== SIDEBAR ====================
+with st.sidebar:
+    st.header("⚙️ QUANTUM CONTROL")
+    
+    st.session_state.telegram_enabled = st.toggle("📱 Telegram Alerts", value=st.session_state.telegram_enabled, key="toggle_telegram")
+    
+    if st.session_state.telegram_enabled:
+        st.success("✅ Telegram ON")
+    else:
+        st.info("📴 Telegram OFF")
+    
+    st.markdown("---")
+    
+    st.subheader("🔄 AUTO-SCAN (30min)")
+    
+    st.session_state.auto_scan_enabled = st.toggle("Enable Auto-Scan", value=st.session_state.auto_scan_enabled, key="toggle_autoscan")
+    
+    if st.session_state.auto_scan_enabled:
+        st.success("✅ Auto-Scan ACTIVE")
+        
+        if st.session_state.last_auto_scan:
+            next_scan = st.session_state.last_auto_scan + timedelta(minutes=30)
+            time_until = (next_scan - datetime.now()).total_seconds()
+            
+            if time_until > 0:
+                st.info(f"Next scan in {int(time_until/60)} min")
+            else:
+                st.warning("Scan en attente...")
+                if st.button("🚀 FORCE SCAN NOW"):
+                    with st.spinner("Auto-scanning..."):
+                        run_auto_scan()
+                    st.rerun()
+        else:
+            if st.button("🚀 START AUTO-SCAN"):
+                with st.spinner("Running first scan..."):
+                    run_auto_scan()
+                st.rerun()
+    else:
+        st.info("📴 Auto-Scan OFF")
+    
+    st.markdown("---")
+    
+    day_stats = calculate_portfolio_stats('day')
+    st.subheader("💰 DAY TRADING")
+    st.metric("Value", f"${day_stats['total_value']:,.2f}")
+    st.metric("P&L", f"${day_stats['total_pnl']:+,.2f}", f"{day_stats['total_pnl_pct']:+.2f}%")
+    
+    with st.expander("➕ ADD DAY POSITION"):
+        with st.form("add_day_pos", clear_on_submit=True):
+            day_symbol = st.text_input("Symbol", "", key="input_day_symbol").upper()
+            day_qty = st.number_input("Quantity", min_value=1, value=10, key="input_day_qty")
+            day_entry = st.number_input("Entry Price", min_value=0.01, value=100.00, step=0.01, key="input_day_entry")
+            day_submit = st.form_submit_button("Add Position", use_container_width=True)
+            
+            if day_submit and day_symbol:
+                add_day_position(day_symbol, day_qty, day_entry)
+                st.success(f"✅ Added {day_qty} {day_symbol} @ ${day_entry}")
+                st.rerun()
+    
+    st.markdown("---")
+    
+    lt_stats = calculate_portfolio_stats('long')
+    st.subheader("📊 LONG-TERM (CÉLI)")
+    st.metric("Value", f"${lt_stats['total_value']:,.2f}")
+    st.metric("P&L", f"${lt_stats['total_pnl']:+,.2f}", f"{lt_stats['total_pnl_pct']:+.2f}%")
+    
+    with st.expander("➕ ADD LONG POSITION"):
+        with st.form("add_long_pos", clear_on_submit=True):
+            lt_symbol = st.text_input("Symbol", "", key="input_lt_symbol").upper()
+            lt_qty = st.number_input("Quantity", min_value=1, value=50, key="input_lt_qty")
+            lt_entry = st.number_input("Entry Price", min_value=0.01, value=150.00, step=0.01, key="input_lt_entry")
+            lt_submit = st.form_submit_button("Add Position", use_container_width=True)
+            
+            if lt_submit and lt_symbol:
+                add_long_position(lt_symbol, lt_qty, lt_entry)
+                st.success(f"✅ Added {lt_qty} {lt_symbol} @ ${lt_entry}")
+                st.rerun()
+    
+    st.markdown("---")
+    
+    st.subheader("📊 SIGNAL TRACKER")
+    active_count = len(st.session_state.active_signals)
+    closed_count = len(st.session_state.closed_signals)
+    
+    st.metric("Active Signals", active_count)
+    st.metric("Closed Trades", closed_count)
+    
+    if closed_count > 0:
+        closed_df = pd.DataFrame(st.session_state.closed_signals)
+        wins = len(closed_df[closed_df['pnl'] > 0])
+        win_rate = (wins / closed_count) * 100
+        st.metric("Win Rate", f"{win_rate:.1f}%")
+    
+    st.markdown("---")
+    
+    st.subheader("🎯 QUANTUM SETTINGS")
+    min_quantum = st.slider("Min Quantum Score", 0, 300, 180, 10, key="slider_min_quantum")
+    min_ai = st.slider("Min AI Score", 0, 100, 60, 5, key="slider_min_ai")
+    
+    st.info(f"📊 Current: Q≥{min_quantum} | AI≥{min_ai}")
+    
+    st.markdown("---")
+    
+    st.subheader("🔬 FEATURES ACTIVE")
+    st.success("✅ Order Flow (ATAS)")
+    st.success("✅ Volume Profile")
+    st.success("✅ SFP Detection")
+    st.success("✅ Elliott Wave")
+    st.success("✅ SMC")
+    st.success("✅ Whale Detection")
+    st.success("✅ 80% Setup Filter")
+    st.success("✅ Telegram Alerts")
+    st.success("✅ Backtest Engine")
+    st.success("✅ Signal Tracker")
+    st.success("✅ Auto-Scan (30min)")
+    st.success("✅ Auto-Refresh (30s)")
+    
+    st.markdown("---")
+    st.caption("🥓 Bacon Trader Pro v4.4 ULTIMATE")
+    st.caption(f"⏰ {datetime.now().strftime('%H:%M:%S')}")
+
+# ==================== CHECK AUTO-SCAN ====================
+if st.session_state.auto_scan_enabled and st.session_state.last_auto_scan:
+    time_since_scan = (datetime.now() - st.session_state.last_auto_scan).total_seconds()
+    if time_since_scan >= 1800:
+        run_auto_scan()
+
+# ==================== MAIN TABS ====================
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    "🎯 Dashboard",
+    "💼 Portfolio Day",
+    "📈 Portfolio LT",
+    "🔍 Quantum Scanner",
+    "🧠 Smart Money",
+    "🧪 Backtest",
+    "📊 Signal Tracker"
+])
+
+# TAB 1: DASHBOARD
+with tab1:
+    st.header("🎯 QUANTUM DASHBOARD")
+    
+    update_signal_status()
+    
+    day_stats = calculate_portfolio_stats('day')
+    lt_stats = calculate_portfolio_stats('long')
+    total_equity = day_stats['total_value'] + lt_stats['total_value']
+    
+    col1, col2, col3, col4, col5 = st.columns(5)
+    col1.metric("Total Equity", f"${total_equity:,.0f}")
+    col2.metric("Day Trading", f"${day_stats['total_value']:,.0f}", f"{day_stats['total_pnl_pct']:+.2f}%")
+    col3.metric("Long-Term", f"${lt_stats['total_value']:,.0f}", f"{lt_stats['total_pnl_pct']:+.2f}%")
+    col4.metric("Active Signals", len(st.session_state.active_signals))
+    col5.metric("Total Positions", len(st.session_state.day_positions) + len(st.session_state.long_positions))
+    
+    st.markdown("---")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.subheader("🔍 Last Scan Info")
+        if st.session_state.last_scan_time:
+            st.write(f"⏰ Last scan: {st.session_state.last_scan_time}")
+            st.write(f"📊 Symbols: {st.session_state.last_scan_count}")
+            st.write(f"✅ Signals: {st.session_state.last_scan_signals}")
+        else:
+            st.info("No scans yet. Go to Quantum Scanner!")
+    
+    with col2:
+        st.subheader("⚙️ Current Settings")
+        st.write(f"📊 Min Quantum: {min_quantum}/300")
+        st.write(f"🤖 Min AI: {min_ai}/100")
+        st.write(f"📱 Telegram: {'ON ✅' if st.session_state.telegram_enabled else 'OFF 📴'}")
+    
+    with col3:
+        st.subheader("🎯 Active Signals")
+        st.metric("Tracking", len(st.session_state.active_signals))
+        st.metric("Closed", len(st.session_state.closed_signals))
+    
+    st.markdown("---")
+    
+    if st.session_state.auto_scan_enabled and len(st.session_state.auto_scan_results) > 0:
+        st.subheader("🔄 Last Auto-Scan Results")
+        st.dataframe(st.session_state.auto_scan_results, use_container_width=True)
+    
+    if len(st.session_state.active_signals) > 0:
+        st.subheader("📊 Active Signals Summary")
+        
+        for idx, signal in enumerate(st.session_state.active_signals):
+            current = get_current_price(signal['symbol'])
+            if current > 0:
+                pnl = (current - signal['entry_price'])
+                pnl_pct = ((current / signal['entry_price']) - 1) * 100
+                
+                col1, col2, col3, col4 = st.columns([2, 3, 3, 2])
+                
+                with col1:
+                    st.markdown(f"### {signal['tier']} {signal['symbol']}")
+                
+                with col2:
+                    st.metric("Entry", f"${signal['entry_price']:.2f}")
+                    st.metric("Current", f"${current:.2f}")
+                
+                with col3:
+                    st.metric("TP1", f"${signal['tp1']:.2f}", "✅" if current >= signal['tp1'] else "")
+                    st.metric("Stop", f"${signal['stop']:.2f}")
+                
+                with col4:
+                    st.metric("P&L", f"${pnl:+.2f}", f"{pnl_pct:+.1f}%")
+                
+                st.markdown("---")
+
+# TAB 2: PORTFOLIO DAY
+with tab2:
+    st.header("💼 DAY TRADING PORTFOLIO")
+    
+    day_portfolio = get_portfolio_with_live_prices('day')
+    
+    if len(day_portfolio) > 0:
+        st.dataframe(day_portfolio, use_container_width=True, hide_index=True)
+        
+        st.subheader("🗑️ Remove Position")
+        
+        for idx, pos in enumerate(st.session_state.day_positions):
+            col1, col2 = st.columns([4, 1])
+            with col1:
+                st.write(f"{pos['symbol']} | Qty: {pos['qty']} | Entry: ${pos['entry']:.2f}")
+            with col2:
+                if st.button("Remove", key=f"remove_day_{idx}"):
+                    remove_position('day', idx)
+                    st.rerun()
+    else:
+        st.info("No day trading positions. Add one in the sidebar!")
+
+# TAB 3: PORTFOLIO LT
+with tab3:
+    st.header("📈 LONG-TERM PORTFOLIO (CÉLI)")
+    
+    lt_portfolio = get_portfolio_with_live_prices('long')
+    
+    if len(lt_portfolio) > 0:
+        st.dataframe(lt_portfolio, use_container_width=True, hide_index=True)
+        
+        st.subheader("🗑️ Remove Position")
+        
+        for idx, pos in enumerate(st.session_state.long_positions):
+            col1, col2 = st.columns([4, 1])
+            with col1:
+                st.write(f"{pos['symbol']} | Qty: {pos['qty']} | Entry: ${pos['entry']:.2f}")
+            with col2:
+                if st.button("Remove", key=f"remove_long_{idx}"):
+                    remove_position('long', idx)
+                    st.rerun()
+    else:
+        st.info("No long-term positions. Add one in the sidebar!")
+
+# TAB 4: QUANTUM SCANNER
+with tab4:
+    st.header("🔍 QUANTUM SCANNER")
+    
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        st.subheader("⚙️ Configuration")
+        market = st.selectbox("Select Market", list(MARKETS.keys()), key="select_market")
+        
+        show_80_only = st.checkbox("⭐ Show only 80% Setups", value=False, key="checkbox_80_setup")
+    
+    with col2:
+        st.metric("Symbols", len(MARKETS[market]))
+        st.metric("Min Q", min_quantum)
+        st.metric("Min AI", min_ai)
+    
+    if st.button("🔥 QUANTUM SCAN", type="primary", use_container_width=True, key="btn_quantum_scan"):
+        st.markdown("---")
+        st.subheader(f"💎 Results: {market}")
+        
+        with st.spinner(f"🔍 Scanning {len(MARKETS[market])} symbols..."):
+            symbols = MARKETS[market]
+            results = scan_market_quantum(symbols, min_quantum, min_ai, show_progress=True)
+            
+            st.session_state.last_scan_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            st.session_state.last_scan_count = len(symbols)
+            st.session_state.last_scan_signals = len(results)
+        
+        if len(results) > 0:
+            st.subheader("🔍 Optional Filters")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                tier_filter = st.multiselect(
+                    "Filter by Tier",
+                    ['💎 DIAMOND', '🥇 PLATINUM', '🥈 GOLD', '🥉 SILVER', '🔸 BRONZE'],
+                    default=[],
+                    key="multiselect_tier"
+                )
+            
+            with col2:
+                flow_filter = st.multiselect(
+                    "Filter by Flow",
+                    ['BULLISH', 'NEUTRAL', 'BEARISH'],
+                    default=[],
+                    key="multiselect_flow"
+                )
+            
+            with col3:
+                whale_only = st.checkbox("🐋 Whales Only", value=False, key="checkbox_whale")
+            
+            with col4:
+                setup_80_only = st.checkbox("⭐ 80% Setup Only", value=False, key="checkbox_80_only")
+            
+            filtered_results = results.copy()
+            
+            if len(tier_filter) > 0:
+                filtered_results = filtered_results[filtered_results['Tier'].isin(tier_filter)]
+            
+            if len(flow_filter) > 0:
+                filtered_results = filtered_results[filtered_results['Flow'].isin(flow_filter)]
+            
+            if whale_only:
+                filtered_results = filtered_results[filtered_results['Whale'] == '🐋']
+            
+            if setup_80_only:
+                filtered_results = filtered_results[filtered_results['80% Setup'] == '⭐']
+            
+            st.markdown("---")
+            
+            if len(filtered_results) > 0:
+                st.success(f"✅ Showing {len(filtered_results)} of {len(results)} signals!")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    if st.button("📊 TRACK ALL VISIBLE", use_container_width=True, key="btn_track_all"):
+                        tracked = 0
+                        for _, row in filtered_results.iterrows():
+                            if add_signal_to_tracker(
+                                row['Symbol'], row['Entry'], row['Stop'],
+                                row['TP1'], row['TP2'], row['TP3'],
+                                row['Quantum'], row['AI'], row['Tier'],
+                                row['Flow'], row['RSI']
+                            ):
+                                tracked += 1
+                        if tracked > 0:
+                            st.success(f"✅ Tracked {tracked} new signals!")
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.info("ℹ️ All signals already tracked!")
+                
+                with col2:
+                    if st.button("💎 TRACK DIAMOND/PLATINUM", use_container_width=True, key="btn_track_premium"):
+                        tracked = 0
+                        for _, row in results[results['Tier'].isin(['💎 DIAMOND', '🥇 PLATINUM'])].iterrows():
+                            if add_signal_to_tracker(
+                                row['Symbol'], row['Entry'], row['Stop'],
+                                row['TP1'], row['TP2'], row['TP3'],
+                                row['Quantum'], row['AI'], row['Tier'],
+                                row['Flow'], row['RSI']
+                            ):
+                                tracked += 1
+                        if tracked > 0:
+                            st.success(f"✅ Tracked {tracked} premium signals!")
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.info("ℹ️ All premium signals already tracked!")
+                
+                with col3:
+                    csv = filtered_results.to_csv(index=False)
+                    st.download_button(
+                        "💾 DOWNLOAD CSV",
+                        csv,
+                        "quantum_signals.csv",
+                        "text/csv",
+                        use_container_width=True,
+                        key="btn_download_csv"
+                    )
+                
+                st.dataframe(filtered_results, use_container_width=True, hide_index=True)
+                
+                st.subheader("📊 Individual Signal Actions")
+                
+                for idx, row in filtered_results.iterrows():
+                    with st.expander(f"{row['Tier']} {row['Symbol']} | Q:{row['Quantum']:.0f} AI:{row['AI']:.0f} | {row['Signal']}"):
+                        col1, col2, col3 = st.columns(3)
+                        
+                        with col1:
+                            st.metric("Entry", f"${row['Entry']:.2f}")
+                            st.metric("Stop", f"${row['Stop']:.2f}")
+                        
+                        with col2:
+                            st.metric("TP1", f"${row['TP1']:.2f}")
+                            st.metric("TP2", f"${row['TP2']:.2f}")
+                        
+                        with col3:
+                            st.metric("TP3", f"${row['TP3']:.2f}")
+                            st.metric("RSI", f"{row['RSI']:.1f}")
+                        
+                        st.write(f"📈 Flow: {row['Flow']}")
+                        st.write(f"💡 Recommendation: {row['Recommendation']}")
+                        
+                        if row['Whale'] == '🐋':
+                            st.warning("🐋 WHALE ACTIVITY DETECTED!")
+                        
+                        if row['80% Setup'] == '⭐':
+                            st.success("⭐ 80% WIN RATE SETUP!")
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            if st.button("📊 TRACK THIS SIGNAL", key=f"track_{row['Symbol']}_{idx}"):
+                                if add_signal_to_tracker(
+                                    row['Symbol'], row['Entry'], row['Stop'],
+                                    row['TP1'], row['TP2'], row['TP3'],
+                                    row['Quantum'], row['AI'], row['Tier'],
+                                    row['Flow'], row['RSI']
+                                ):
+                                    st.success(f"✅ Tracking {row['Symbol']}!")
+                                    time.sleep(0.5)
+                                    st.rerun()
+                                else:
+                                    st.warning(f"⚠️ {row['Symbol']} already tracked!")
+                        
+                        with col2:
+                            if st.button("📱 SEND TO TELEGRAM", key=f"tg_{row['Symbol']}_{idx}"):
+                                msg = f"""
+🥓 <b>BACON TRADER PRO</b>
+
+{row['Tier']} <b>{row['Symbol']}</b>
+
+📊 Quantum: {row['Quantum']:.0f}/300
+🤖 AI: {row['AI']:.0f}/100
+
+💰 Entry: ${row['Entry']:.2f}
+🛑 Stop: ${row['Stop']:.2f}
+🎯 TP1: ${row['TP1']:.2f} | TP2: ${row['TP2']:.2f} | TP3: ${row['TP3']:.2f}
+
+📈 Flow: {row['Flow']}
+📊 RSI: {row['RSI']:.1f}
+{('🐋 WHALE!' if row['Whale'] == '🐋' else '')}
+{('⭐ 80% SETUP!' if row['80% Setup'] == '⭐' else '')}
+
+⚡ {row['Recommendation']}
+                                """
+                                if send_telegram_alert(msg):
+                                    st.success("✅ Sent to Telegram!")
+                                else:
+                                    st.error("❌ Failed to send!")
+            else:
+                st.warning(f"⚠️ No signals match your filters! Try removing some filters.")
+                st.info(f"💡 Total signals found: {len(results)} (before filters)")
+                
+                if st.button("🔄 CLEAR ALL FILTERS", type="primary"):
+                    st.rerun()
+        else:
+            st.warning("📊 No signals found matching your criteria!")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.info(f"""
+                **Current Settings:**
+                - Min Quantum: {min_quantum}/300
+                - Min AI: {min_ai}/100
+                - Market: {market}
+                
+                **Try:**
+                - Lower thresholds in sidebar
+                - Scan during market hours (9:30-16:00 EST)
+                - Try different markets (TOP 10, TOP 50)
+                """)
+            
+            with col2:
+                st.success(f"""
+                **Scan Statistics:**
+                - Symbols scanned: {len(symbols)}
+                - Time: {datetime.now().strftime('%H:%M:%S')}
+                - Status: Complete ✅
+                
+                **Markets Open:**
+                - 🇺🇸 NYSE: 9:30-16:00 EST
+                - 🇺🇸 NASDAQ: 9:30-16:00 EST
+                - ₿ CRYPTO: 24/7
+                """)
+            
+            if st.button("🔧 AUTO-FIX: Lower Thresholds", type="primary", key="auto_fix_btn"):
+                st.info("💡 Go to sidebar and lower: Quantum to 150 | AI to 50")
+
 # TAB 5: SMART MONEY
 with tab5:
     st.header("🧠 SMART MONEY CONCEPTS")
@@ -743,10 +1781,8 @@ with tab6:
 with tab7:
     st.header("📊 SIGNAL TRACKER")
     
-    # ✅ UPDATE STATUS À CHAQUE OUVERTURE DU TAB
     update_signal_status()
     
-    # Bouton de refresh manuel
     if st.button("🔄 REFRESH SIGNALS", use_container_width=True, key="btn_refresh_signals"):
         update_signal_status()
         st.success("✅ Signals updated!")
@@ -799,7 +1835,6 @@ with tab7:
                             st.session_state.active_signals.pop(idx)
                             st.rerun()
                     
-                    # Progress bar
                     distance_to_tp1 = (current_price - signal['entry_price']) / (signal['tp1'] - signal['entry_price'])
                     progress = min(max(distance_to_tp1, 0), 1)
                     st.progress(progress)
@@ -860,5 +1895,5 @@ with tab7:
 
 # ==================== FOOTER ====================
 st.markdown("---")
-st.caption("🥓 Bacon Trader Pro v4.4 ULTIMATE | Made with 🔥 by We Bacon ")
+st.caption("🥓 Bacon Trader Pro v4.4 ULTIMATE | Made with 🔥 by Bacon Gang")
 st.caption(f"⏰ Last Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S EST')}")
