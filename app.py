@@ -1846,23 +1846,6 @@ with tab7:
     tab_active, tab_closed = st.tabs(["🟢 Active Signals", "📝 Closed Trades"])
     
     with tab_active:
-        if len(st.session_state.active
-# TAB 7: SIGNAL TRACKER (SUITE)
-with tab7:
-    st.header("📊 SIGNAL TRACKER")
-    
-    update_signal_status()
-    
-    if st.button("🔄 REFRESH SIGNALS", use_container_width=True, key="btn_refresh_signals"):
-        update_signal_status()
-        st.success("✅ Signals updated!")
-        st.rerun()
-    
-    st.markdown("---")
-    
-    tab_active, tab_closed = st.tabs(["🟢 Active Signals", "📝 Closed Trades"])
-    
-    with tab_active:
         if len(st.session_state.active_signals) > 0:
             st.subheader(f"🟢 Active Signals ({len(st.session_state.active_signals)})")
             
@@ -1965,5 +1948,5 @@ with tab7:
 
 # ==================== FOOTER ====================
 st.markdown("---")
-st.caption("🥓 Bacon Trader Pro v4.4 ULTIMATE | Made with 🔥 by Bacon Gang")
+st.caption("🥓 Bacon Trader Pro v4.4 ULTIMATE | Made with 🔥 by WeBacon ")
 st.caption(f"⏰ Last Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S EST')}")
