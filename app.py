@@ -8,7 +8,6 @@ from datetime import datetime, timedelta
 import time
 import json
 import requests
-import os
 
 # ==================== CONFIG ====================
 st.set_page_config(
@@ -17,35 +16,6 @@ st.set_page_config(
     page_icon="🥓",
     initial_sidebar_state="expanded"
 )
-
-# ==================== PERSISTENCE SYSTEM ====================
-SIGNALS_FILE = "signals_data.json"
-
-def load_signals():
-    """Charge les signaux depuis le fichier JSON"""
-    if os.path.exists(SIGNALS_FILE):
-        try:
-            with open(SIGNALS_FILE, 'r') as f:
-                data = json.load(f)
-                return data.get('active_signals', []), data.get('closed_signals', [])
-        except:
-            return [], []
-    return [], []
-
-def save_signals():
-    """Sauvegarde les signaux dans le fichier JSON"""
-    try:
-        data = {
-            'active_signals': st.session_state.active_signals,
-            'closed_signals': st.session_state.closed_signals,
-            'last_update': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        }
-        with open(SIGNALS_FILE, 'w') as f:
-            json.dump(data, f, indent=2)
-        return True
-    except Exception as e:
-        st.error(f"❌ Save error: {e}")
-        return False
 
 # ==================== TELEGRAM CONFIG ====================
 TELEGRAM_TOKEN = st.secrets.get("TELEGRAM_TOKEN", "8144444384:AAFlblBgToY7ew50ufZTmNd5qJGRid-TtVA")
@@ -69,13 +39,10 @@ if 'telegram_enabled' not in st.session_state:
     st.session_state.telegram_enabled = True
 if 'last_telegram_sent' not in st.session_state:
     st.session_state.last_telegram_sent = {}
-
-# LOAD SIGNALS FROM FILE
 if 'active_signals' not in st.session_state:
-    active, closed = load_signals()
-    st.session_state.active_signals = active
-    st.session_state.closed_signals = closed
-
+    st.session_state.active_signals = []
+if 'closed_signals' not in st.session_state:
+    st.session_state.closed_signals = []
 if 'auto_scan_enabled' not in st.session_state:
     st.session_state.auto_scan_enabled = False
 if 'last_auto_scan' not in st.session_state:
@@ -84,6 +51,8 @@ if 'auto_scan_results' not in st.session_state:
     st.session_state.auto_scan_results = []
 if 'last_update' not in st.session_state:
     st.session_state.last_update = time.time()
+if 'scan_results' not in st.session_state:
+    st.session_state.scan_results = None
 
 # ==================== CACHE ====================
 @st.cache_data(ttl=300)
@@ -458,7 +427,7 @@ def scan_market_quantum(symbols, min_score=180, min_ai=60, show_progress=True):
                     results.append({'Time': datetime.now().strftime("%H:%M"), 'Symbol': symbol, 'Quantum': analysis['quantum_score'], 'AI': analysis['ai_score'],
                                     'Tier': analysis['tier'], 'Signal': analysis['signal'], 'Entry': round(analysis['current_price'], 2), 'Stop': stop, 'TP1': tp1, 'TP2': tp2, 'TP3': tp3,
                                     'RSI': round(analysis['rsi'], 1), 'Flow': analysis['order_flow']['imbalance'], 'Whale': '🐋' if analysis['whale_alert'] else '',
-                                    '80% Setup': '⭐' if analysis['setup_80']['valid'] else '', 'Recommendation': analysis['recommendation']})
+                                    '80% Setup': '⭐' if analysis['setup_80']['valid'] else '', 'Setup Score': analysis['setup_80']['score'], 'Recommendation': analysis['recommendation']})
         except Exception as e:
             errors += 1
         if show_progress:
@@ -532,10 +501,6 @@ def update_signal_status():
     for idx in reversed(to_close):
         closed_signal = st.session_state.active_signals.pop(idx)
         st.session_state.closed_signals.append(closed_signal)
-    
-    # SAUVEGARDE après chaque update
-    if len(to_close) > 0:
-        save_signals()
 
 def run_backtest(symbol, period="6mo", initial_capital=10000):
     df = get_live_data(symbol, period=period, interval="1d")
@@ -661,6 +626,70 @@ def run_auto_scan():
         st.session_state.auto_scan_results = results
         st.session_state.last_auto_scan = datetime.now()
 
+def create_chart_analysis(df, symbol, analysis):
+    """Crée un graphique d'analyse technique complet"""
+    fig = make_subplots(
+        rows=4, cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.05,
+        row_heights=[0.5, 0.15, 0.15, 0.20],
+        subplot_titles=(f'{symbol} - Price Action', 'RSI', 'MACD', 'Volume')
+    )
+    
+    # Candlesticks
+    fig.add_trace(go.Candlestick(
+        x=df.index,
+        open=df['Open'],
+        high=df['High'],
+        low=df['Low'],
+        close=df['Close'],
+        name='Price'
+    ), row=1, col=1)
+    
+    # EMAs
+    ema9 = df['Close'].ewm(span=9).mean()
+    ema21 = df['Close'].ewm(span=21).mean()
+    ema50 = df['Close'].ewm(span=50).mean()
+    
+    fig.add_trace(go.Scatter(x=df.index, y=ema9, name='EMA9', line=dict(color='cyan', width=1)), row=1, col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=ema21, name='EMA21', line=dict(color='orange', width=1)), row=1, col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=ema50, name='EMA50', line=dict(color='magenta', width=1)), row=1, col=1)
+    
+    # Volume Profile POC
+    if analysis['volume_profile']['poc'] > 0:
+        fig.add_hline(y=analysis['volume_profile']['poc'], line_dash="dash", line_color="yellow", 
+                     annotation_text="POC", row=1, col=1)
+    
+    # RSI
+    rsi_values = [calculate_rsi(df.iloc[:i+1], 14) for i in range(13, len(df))]
+    rsi_dates = df.index[13:]
+    fig.add_trace(go.Scatter(x=rsi_dates, y=rsi_values, name='RSI', line=dict(color='purple')), row=2, col=1)
+    fig.add_hline(y=70, line_dash="dash", line_color="red", row=2, col=1)
+    fig.add_hline(y=30, line_dash="dash", line_color="green", row=2, col=1)
+    
+    # MACD
+    macd_line = df['Close'].ewm(span=12).mean() - df['Close'].ewm(span=26).mean()
+    signal_line = macd_line.ewm(span=9).mean()
+    histogram = macd_line - signal_line
+    
+    fig.add_trace(go.Scatter(x=df.index, y=macd_line, name='MACD', line=dict(color='blue')), row=3, col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=signal_line, name='Signal', line=dict(color='red')), row=3, col=1)
+    fig.add_trace(go.Bar(x=df.index, y=histogram, name='Histogram', marker_color='gray'), row=3, col=1)
+    
+    # Volume
+    colors = ['red' if df['Close'].iloc[i] < df['Open'].iloc[i] else 'green' for i in range(len(df))]
+    fig.add_trace(go.Bar(x=df.index, y=df['Volume'], name='Volume', marker_color=colors), row=4, col=1)
+    
+    fig.update_layout(
+        height=1000,
+        showlegend=True,
+        xaxis_rangeslider_visible=False,
+        template='plotly_dark',
+        title_text=f"📊 {symbol} - Quantum Analysis"
+    )
+    
+    return fig
+
 # ==================== THEME ====================
 st.markdown("""
 <style>
@@ -673,6 +702,7 @@ st.markdown("""
     .whale-alert {background: linear-gradient(135deg, rgba(255,0,255,0.3) 0%, rgba(255,100,255,0.4) 100%); border: 3px solid magenta;
                   padding: 15px; border-radius: 10px; color: white; font-weight: bold; margin: 10px 0; animation: pulse 2s infinite;}
     @keyframes pulse {0%, 100% {opacity: 1;} 50% {opacity: 0.7;}}
+    .metric-card {background: rgba(255,140,0,0.1); border: 2px solid #ff8c00; border-radius: 10px; padding: 15px; margin: 10px 0;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -682,7 +712,7 @@ with col1:
     st.markdown("# 🥓")
 with col2:
     st.markdown("# BACON TRADER PRO")
-    st.caption("⚡ QUANTUM ULTIMATE v6.3 | ⭐ Setup 80% | 📊 Signal Tracker | 🧪 Backtest | 🧠 SMC | 💾 PERSISTENCE")
+    st.caption("⚡ QUANTUM ULTIMATE v7.0 | ⭐ Setup 80% | 📊 Signal Tracker | 🧪 Backtest | 🧠 SMC | 📈 Charts")
 with col3:
     now = datetime.now()
     market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
@@ -708,6 +738,17 @@ with st.sidebar:
         st.success("✅ Telegram ON")
     else:
         st.info("📴 Telegram OFF")
+    
+    st.markdown("---")
+    st.subheader("🎯 SCAN PARAMETERS")
+    min_quantum = st.slider("Min Quantum Score", 0, 300, 180, 10, help="Minimum Quantum score pour filtrer les signaux")
+    min_ai = st.slider("Min AI Score", 0, 100, 60, 5, help="Minimum AI score pour filtrer les signaux")
+    min_setup_score = st.slider("Min Setup 80% Score", 0, 100, 0, 10, help="Minimum score pour le setup 80%")
+    only_setup_80 = st.checkbox("⭐ Only 80% Setups", help="Afficher seulement les setups avec score >= 80")
+    only_premium = st.checkbox("💎 Only Premium (Diamond/Platinum)", help="Afficher seulement les tiers premium")
+    
+    st.info(f"📊 Q≥{min_quantum} | AI≥{min_ai} | Setup≥{min_setup_score}")
+    
     st.markdown("---")
     st.subheader("🔄 AUTO-SCAN (30min)")
     st.session_state.auto_scan_enabled = st.toggle("Enable Auto-Scan", value=st.session_state.auto_scan_enabled)
@@ -731,15 +772,16 @@ with st.sidebar:
                 st.rerun()
     else:
         st.info("📴 Auto-Scan OFF")
+    
     st.markdown("---")
     day_stats = calculate_portfolio_stats('day')
     st.subheader("💰 DAY TRADING")
     st.metric("Value", f"${day_stats['total_value']:,.2f}")
     st.metric("P&L", f"${day_stats['total_pnl']:+,.2f}", f"{day_stats['total_pnl_pct']:+.2f}%")
     st.markdown("**➕ Add Day Position:**")
-    day_symbol = st.text_input("Symbol", "", placeholder="AAPL").upper()
-    day_qty = st.number_input("Quantity", min_value=1, value=10)
-    day_entry = st.number_input("Entry Price", min_value=0.01, value=100.00, step=0.01)
+    day_symbol = st.text_input("Symbol", "", placeholder="AAPL", key="day_sym").upper()
+    day_qty = st.number_input("Quantity", min_value=1, value=10, key="day_qty")
+    day_entry = st.number_input("Entry Price", min_value=0.01, value=100.00, step=0.01, key="day_entry")
     if st.button("➕ Add Day Position", use_container_width=True):
         if day_symbol and len(day_symbol) > 0:
             add_day_position(day_symbol, day_qty, day_entry)
@@ -748,15 +790,16 @@ with st.sidebar:
             st.rerun()
         else:
             st.error("❌ Enter a symbol!")
+    
     st.markdown("---")
     lt_stats = calculate_portfolio_stats('long')
     st.subheader("📊 LONG-TERM (CÉLI)")
     st.metric("Value", f"${lt_stats['total_value']:,.2f}")
     st.metric("P&L", f"${lt_stats['total_pnl']:+,.2f}", f"{lt_stats['total_pnl_pct']:+.2f}%")
     st.markdown("**➕ Add Long Position:**")
-    lt_symbol = st.text_input("Symbol ", "", placeholder="MSFT").upper()
-    lt_qty = st.number_input("Quantity ", min_value=1, value=50)
-    lt_entry = st.number_input("Entry Price ", min_value=0.01, value=150.00, step=0.01)
+    lt_symbol = st.text_input("Symbol ", "", placeholder="MSFT", key="lt_sym").upper()
+    lt_qty = st.number_input("Quantity ", min_value=1, value=50, key="lt_qty")
+    lt_entry = st.number_input("Entry Price ", min_value=0.01, value=150.00, step=0.01, key="lt_entry")
     if st.button("➕ Add Long Position", use_container_width=True):
         if lt_symbol and len(lt_symbol) > 0:
             add_long_position(lt_symbol, lt_qty, lt_entry)
@@ -765,6 +808,7 @@ with st.sidebar:
             st.rerun()
         else:
             st.error("❌ Enter a symbol!")
+    
     st.markdown("---")
     st.subheader("📊 SIGNAL TRACKER")
     active_count = len(st.session_state.active_signals)
@@ -776,13 +820,9 @@ with st.sidebar:
         wins = len(closed_df[closed_df['pnl'] > 0])
         win_rate = (wins / closed_count) * 100
         st.metric("Win Rate", f"{win_rate:.1f}%")
+    
     st.markdown("---")
-    st.subheader("🎯 QUANTUM SETTINGS")
-    min_quantum = st.slider("Min Quantum Score", 0, 300, 180, 10)
-    min_ai = st.slider("Min AI Score", 0, 100, 60, 5)
-    st.info(f"📊 Current: Q≥{min_quantum} | AI≥{min_ai}")
-    st.markdown("---")
-    st.caption("🥓 Bacon Trader Pro v6.3")
+    st.caption("🥓 Bacon Trader Pro v7.0")
     st.caption(f"⏰ {datetime.now().strftime('%H:%M:%S')}")
 
 if st.session_state.auto_scan_enabled and st.session_state.last_auto_scan:
@@ -791,22 +831,34 @@ if st.session_state.auto_scan_enabled and st.session_state.last_auto_scan:
         run_auto_scan()
 
 # ==================== TABS ====================
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["🎯 Dashboard", "💼 Portfolio Day", "📈 Portfolio LT", "🔍 Quantum Scanner", "🧠 Smart Money", "🧪 Backtest", "📊 Signal Tracker"])
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    "🎯 Dashboard", 
+    "💼 Portfolio Day", 
+    "📈 Portfolio LT", 
+    "🔍 Quantum Scanner", 
+    "🧠 Smart Money", 
+    "🧪 Backtest", 
+    "📊 Signal Tracker"
+])
 
 # TAB 1: DASHBOARD
 with tab1:
     st.header("🎯 QUANTUM DASHBOARD")
     update_signal_status()
+    
     day_stats = calculate_portfolio_stats('day')
     lt_stats = calculate_portfolio_stats('long')
     total_equity = day_stats['total_value'] + lt_stats['total_value']
+    
     col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("Total Equity", f"${total_equity:,.0f}")
     col2.metric("Day Trading", f"${day_stats['total_value']:,.0f}", f"{day_stats['total_pnl_pct']:+.2f}%")
     col3.metric("Long-Term", f"${lt_stats['total_value']:,.0f}", f"{lt_stats['total_pnl_pct']:+.2f}%")
     col4.metric("Active Signals", len(st.session_state.active_signals))
     col5.metric("Total Positions", len(st.session_state.day_positions) + len(st.session_state.long_positions))
+    
     st.markdown("---")
+    
     if len(st.session_state.active_signals) > 0:
         st.subheader("📊 Active Signals Summary")
         for idx, signal in enumerate(st.session_state.active_signals):
@@ -814,18 +866,29 @@ with tab1:
             if current > 0:
                 pnl = (current - signal['entry_price'])
                 pnl_pct = ((current / signal['entry_price']) - 1) * 100
+                
                 col1, col2, col3, col4 = st.columns([2, 3, 3, 2])
+                
                 with col1:
                     st.markdown(f"### {signal['tier']} {signal['symbol']}")
+                    st.caption(f"Entry: {signal['entry_date']}")
+                
                 with col2:
                     st.metric("Entry", f"${signal['entry_price']:.2f}")
                     st.metric("Current", f"${current:.2f}")
+                
                 with col3:
                     st.metric("TP1", f"${signal['tp1']:.2f}", "✅" if current >= signal['tp1'] else "")
                     st.metric("Stop", f"${signal['stop']:.2f}")
+                
                 with col4:
-                    st.metric("P&L", f"${pnl:+.2f}", f"{pnl_pct:+.1f}%")
+                    st.metric("Unrealized P&L", f"${pnl:+.2f}", f"{pnl_pct:+.1f}%")
+                    progress = min(max((current - signal['entry_price']) / (signal['tp3'] - signal['entry_price']), 0), 1)
+                    st.progress(progress)
+                
                 st.markdown("---")
+    else:
+        st.info("📊 No active signals. Start scanning to find opportunities!")
 
 # TAB 2: PORTFOLIO DAY
 with tab2:
@@ -875,9 +938,6 @@ with tab4:
         st.metric("Min Q", min_quantum)
         st.metric("Min AI", min_ai)
     
-    if 'scan_results' not in st.session_state:
-        st.session_state.scan_results = None
-    
     if st.button("🔥 QUANTUM SCAN", type="primary", use_container_width=True):
         st.markdown("---")
         st.subheader(f"💎 Results: {market}")
@@ -886,8 +946,19 @@ with tab4:
             results = scan_market_quantum(symbols, min_quantum, min_ai, show_progress=True)
         
         if len(results) > 0:
-            st.session_state.scan_results = results
-            st.success(f"✅ Found {len(results)} signals!")
+            # APPLY FILTERS
+            filtered_results = results.copy()
+            
+            if only_setup_80:
+                filtered_results = filtered_results[filtered_results['Setup Score'] >= 80]
+            elif min_setup_score > 0:
+                filtered_results = filtered_results[filtered_results['Setup Score'] >= min_setup_score]
+            
+            if only_premium:
+                filtered_results = filtered_results[filtered_results['Tier'].isin(['💎 DIAMOND', '🥇 PLATINUM'])]
+            
+            st.session_state.scan_results = filtered_results
+            st.success(f"✅ Found {len(filtered_results)} signals! ({len(results)} total before filters)")
             st.rerun()
         else:
             st.session_state.scan_results = None
@@ -896,10 +967,25 @@ with tab4:
     if st.session_state.scan_results is not None and len(st.session_state.scan_results) > 0:
         results = st.session_state.scan_results
         
-        st.success(f"✅ Found {len(results)} signals!")
+        st.success(f"✅ {len(results)} signals found!")
+        
+        # STATISTICS
+        setup_80_count = len(results[results['Setup Score'] >= 80])
+        diamond_count = len(results[results['Tier'] == '💎 DIAMOND'])
+        platinum_count = len(results[results['Tier'] == '🥇 PLATINUM'])
+        
+        col1, col2, col3, col4, col5 = st.columns(5)
+        col1.metric("Total Signals", len(results))
+        col2.metric("⭐ 80% Setups", setup_80_count)
+        col3.metric("💎 Diamond", diamond_count)
+        col4.metric("🥇 Platinum", platinum_count)
+        col5.metric("Avg Quantum", f"{results['Quantum'].mean():.0f}")
+        
+        st.markdown("---")
         
         # QUICK TRACK BUTTONS
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
+        
         with col1:
             if st.button("📊 TRACK ALL", use_container_width=True, type="secondary", key="track_all_btn"):
                 tracked = 0
@@ -979,6 +1065,44 @@ with tab4:
                     st.info("All already tracked!")
         
         with col3:
+            if st.button("⭐ TRACK 80% SETUPS", use_container_width=True, type="secondary", key="track_80_btn"):
+                tracked = 0
+                setup_80 = results[results['Setup Score'] >= 80]
+                for _, row in setup_80.iterrows():
+                    new_signal = {
+                        'symbol': str(row['Symbol']),
+                        'entry_price': float(row['Entry']),
+                        'entry_date': datetime.now().strftime('%Y-%m-%d %H:%M'),
+                        'stop': float(row['Stop']),
+                        'tp1': float(row['TP1']),
+                        'tp2': float(row['TP2']),
+                        'tp3': float(row['TP3']),
+                        'quantum_score': float(row['Quantum']),
+                        'ai_score': float(row['AI']),
+                        'tier': str(row['Tier']),
+                        'flow': str(row['Flow']),
+                        'rsi': float(row['RSI']),
+                        'status': 'ACTIVE',
+                        'exit_price': None,
+                        'exit_reason': None,
+                        'exit_date': None,
+                        'pnl': 0,
+                        'pnl_pct': 0
+                    }
+                    exists = any(s['symbol'] == row['Symbol'] and s['status'] == 'ACTIVE' for s in st.session_state.active_signals)
+                    if not exists:
+                        st.session_state.active_signals.append(new_signal)
+                        tracked += 1
+                
+                if tracked > 0:
+                    st.success(f"✅ Tracked {tracked} 80% setups!")
+                    st.balloons()
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.info("All already tracked!")
+        
+        with col4:
             csv = results.to_csv(index=False)
             st.download_button("💾 CSV", csv, "signals.csv", "text/csv", use_container_width=True)
         
@@ -991,7 +1115,7 @@ with tab4:
             selected_symbols = []
             
             for idx, row in results.iterrows():
-                col1, col2, col3, col4 = st.columns([1, 2, 3, 1])
+                col1, col2, col3, col4, col5 = st.columns([1, 2, 3, 2, 1])
                 
                 with col1:
                     is_checked = st.checkbox(f"{row['Tier'][:2]}", key=f"check_{idx}_{row['Symbol']}")
@@ -1000,11 +1124,16 @@ with tab4:
                 
                 with col2:
                     st.write(f"**{row['Symbol']}**")
+                    if row['80% Setup'] == '⭐':
+                        st.caption("⭐ 80% Setup")
                 
                 with col3:
-                    st.write(f"Q:{row['Quantum']:.0f} | AI:{row['AI']:.0f} | RSI:{row['RSI']:.1f} | {row['Flow']}")
+                    st.write(f"Q:{row['Quantum']:.0f} | AI:{row['AI']:.0f} | Setup:{row['Setup Score']}")
                 
                 with col4:
+                    st.write(f"RSI:{row['RSI']:.1f} | {row['Flow']}")
+                
+                with col5:
                     st.write(f"${row['Entry']:.2f}")
             
             submitted = st.form_submit_button("📊 TRACK SELECTED", type="primary", use_container_width=True)
@@ -1047,23 +1176,51 @@ with tab4:
         st.markdown("---")
         st.dataframe(results, use_container_width=True, hide_index=True)
 
-
 # TAB 5: SMART MONEY
 with tab5:
     st.header("🧠 SMART MONEY CONCEPTS")
-    symbol_smc = st.text_input("Enter Symbol for SMC Analysis", "AAPL").upper()
+    
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        symbol_smc = st.text_input("Enter Symbol for SMC Analysis", "AAPL").upper()
+    with col2:
+        period_smc = st.selectbox("Period", ["1mo", "3mo", "6mo", "1y"], index=2)
+    
     if st.button("🔍 ANALYZE SMC", type="primary", use_container_width=True):
-        df = get_live_data(symbol_smc, "6mo", "1d")
+        df = get_live_data(symbol_smc, period=period_smc, interval="1d")
+        
         if df is not None and len(df) > 50:
             analysis = calculate_quantum_ai_score(df, symbol_smc)
+            
             st.markdown("---")
-            col1, col2, col3, col4 = st.columns(4)
+            
+            # METRICS
+            col1, col2, col3, col4, col5 = st.columns(5)
             col1.metric("Quantum Score", f"{analysis['quantum_score']:.0f}/300")
             col2.metric("AI Score", f"{analysis['ai_score']:.0f}/100")
             col3.metric(analysis['tier'], analysis['recommendation'])
             col4.metric("RSI", f"{analysis['rsi']:.1f}")
+            col5.metric("Current Price", f"${analysis['current_price']:.2f}")
+            
             st.markdown("---")
+            
+            # 80% SETUP
+            if analysis['setup_80']['valid']:
+                st.markdown('<div class="setup-80">⭐ 80% WIN RATE SETUP DETECTED!</div>', unsafe_allow_html=True)
+                st.subheader("📋 Setup Analysis")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Setup Score", f"{analysis['setup_80']['score']}/100")
+                    st.metric("Confidence", analysis['setup_80']['confidence'])
+                with col2:
+                    st.write("**Reasons:**")
+                    for reason in analysis['setup_80']['reasons']:
+                        st.write(reason)
+                st.markdown("---")
+            
+            # ORDER FLOW & VOLUME PROFILE
             col1, col2 = st.columns(2)
+            
             with col1:
                 st.subheader("📊 Order Flow")
                 st.metric("Imbalance", analysis['order_flow']['imbalance'])
@@ -1071,50 +1228,132 @@ with tab5:
                 st.metric("Volume Ratio", f"{analysis['order_flow']['vol_ratio']:.2f}x")
                 if analysis['order_flow']['whale_detected']:
                     st.markdown('<div class="whale-alert">🐋 WHALE ACTIVITY DETECTED!</div>', unsafe_allow_html=True)
+            
             with col2:
                 st.subheader("📈 Volume Profile")
-                st.metric("POC", f"${analysis['volume_profile']['poc']:.2f}")
-                st.metric("VAH", f"${analysis['volume_profile']['vah']:.2f}")
-                st.metric("VAL", f"${analysis['volume_profile']['val']:.2f}")
+                st.metric("POC (Point of Control)", f"${analysis['volume_profile']['poc']:.2f}")
+                st.metric("VAH (Value Area High)", f"${analysis['volume_profile']['vah']:.2f}")
+                st.metric("VAL (Value Area Low)", f"${analysis['volume_profile']['val']:.2f}")
+                poc_distance = abs(analysis['current_price'] - analysis['volume_profile']['poc']) / analysis['current_price'] * 100
+                st.metric("Distance from POC", f"{poc_distance:.2f}%")
+            
             st.markdown("---")
-            if analysis['setup_80']['valid']:
-                st.markdown('<div class="setup-80">⭐ 80% WIN RATE SETUP DETECTED!</div>', unsafe_allow_html=True)
-                st.subheader("📋 Setup Analysis")
-                st.metric("Score", f"{analysis['setup_80']['score']}/100")
-                st.write("**Reasons:**")
-                for reason in analysis['setup_80']['reasons']:
-                    st.write(reason)
+            
+            # MARKET STRUCTURE
+            st.subheader("🏗️ Market Structure (SMC)")
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Structure", analysis['smc']['structure'])
+            col2.metric("Bias", analysis['smc']['bias'])
+            col3.metric("Order Blocks", len(analysis['smc']['order_blocks']))
+            
+            if len(analysis['smc']['order_blocks']) > 0:
+                st.write("**Recent Order Blocks:**")
+                for ob in analysis['smc']['order_blocks']:
+                    st.write(f"- {ob['type']}: Top ${ob['top']:.2f} | Bottom ${ob['bottom']:.2f}")
+            
+            # SFP SIGNALS
+            if len(analysis['sfp_signals']) > 0:
+                st.markdown("---")
+                st.subheader("⚡ Swing Failure Patterns (SFP)")
+                for sfp in analysis['sfp_signals']:
+                    sfp_type = "🟢 BULLISH" if sfp['type'] == 'BULLISH_SFP' else "🔴 BEARISH"
+                    st.write(f"{sfp_type} SFP at ${sfp['price']:.2f} (Level: ${sfp['level']:.2f}) - Score: {sfp['score']}")
+            
+            # ELLIOTT WAVE
+            st.markdown("---")
+            st.subheader("🌊 Elliott Wave Analysis")
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Wave Count", analysis['elliott']['wave_count'])
+            col2.metric("Direction", analysis['elliott']['direction'])
+            col3.metric("Confidence", f"{analysis['elliott']['confidence']}%")
+            
+            # CHART
+            st.markdown("---")
+            st.subheader(f"📈 Technical Chart - {symbol_smc}")
+            chart = create_chart_analysis(df, symbol_smc, analysis)
+            st.plotly_chart(chart, use_container_width=True)
+            
         else:
-            st.error("❌ Unable to fetch data.")
+            st.error("❌ Unable to fetch data for this symbol.")
 
 # TAB 6: BACKTEST
 with tab6:
     st.header("🧪 BACKTEST ENGINE")
-    col1, col2, col3 = st.columns(3)
+    
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         bt_symbol = st.text_input("Symbol to Backtest", "AAPL").upper()
     with col2:
         bt_period = st.selectbox("Period", ["3mo", "6mo", "1y", "2y"], index=1)
     with col3:
         bt_capital = st.number_input("Initial Capital", min_value=1000, max_value=1000000, value=10000, step=1000)
+    with col4:
+        bt_risk_pct = st.number_input("Risk %", min_value=0.5, max_value=5.0, value=2.0, step=0.5)
+    
     if st.button("🚀 RUN BACKTEST", type="primary", use_container_width=True):
-        with st.spinner(f"Running backtest on {bt_symbol}..."):
+        with st.spinner(f"🔍 Running backtest on {bt_symbol}..."):
             backtest_results = run_backtest(bt_symbol, bt_period, bt_capital)
+        
         if backtest_results:
             st.success("✅ Backtest Complete!")
             stats = backtest_results['stats']
+            
             st.markdown("---")
+            
+            # PERFORMANCE METRICS
+            st.subheader("📊 Performance Metrics")
             col1, col2, col3, col4, col5 = st.columns(5)
             col1.metric("Total Trades", stats['Total Trades'])
             col2.metric("Win Rate", f"{stats['Win Rate']:.1f}%")
             col3.metric("Profit Factor", f"{stats['Profit Factor']:.2f}")
             col4.metric("Total P&L", f"${stats['Total P&L']:,.2f}", f"{stats['Total P&L%']:.2f}%")
             col5.metric("Sharpe Ratio", f"{stats['Sharpe Ratio']:.2f}")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Wins", stats['Wins'])
+            col2.metric("Losses", stats['Losses'])
+            col3.metric("Avg Win", f"${stats['Avg Win']:.2f}")
+            col4.metric("Avg Loss", f"${stats['Avg Loss']:.2f}")
+            
+            col1, col2 = st.columns(2)
+            col1.metric("Max Drawdown", f"{stats['Max Drawdown']:.2f}%")
+            col2.metric("Final Balance", f"${stats['Final Balance']:,.2f}")
+            
             st.markdown("---")
-            st.subheader("📊 Trade History")
+            
+            # EQUITY CURVE
+            st.subheader("📈 Equity Curve")
+            equity_df = pd.DataFrame({
+                'Date': backtest_results['dates'],
+                'Balance': backtest_results['equity_curve']
+            })
+            
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=equity_df['Date'],
+                y=equity_df['Balance'],
+                mode='lines',
+                name='Balance',
+                line=dict(color='cyan', width=2)
+            ))
+            fig.add_hline(y=bt_capital, line_dash="dash", line_color="orange", annotation_text="Initial Capital")
+            fig.update_layout(
+                title="Equity Curve",
+                xaxis_title="Date",
+                yaxis_title="Balance ($)",
+                template='plotly_dark',
+                height=400
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            st.markdown("---")
+            
+            # TRADE HISTORY
+            st.subheader("📋 Trade History")
             st.dataframe(backtest_results['trades'], use_container_width=True, hide_index=True)
+            
         else:
-            st.error("❌ Backtest failed.")
+            st.error("❌ Backtest failed. Not enough data or no trades generated.")
 
 # TAB 7: SIGNAL TRACKER
 with tab7:
@@ -1148,22 +1387,15 @@ with tab7:
                     'pnl': 0,
                     'pnl_pct': 0
                 }
-                
                 st.session_state.active_signals.append(test_signal)
-                
-                if save_signals():
-                    st.success(f"✅ Test signal added & SAVED! Total: {len(st.session_state.active_signals)}")
-                    st.balloons()
-                else:
-                    st.error("❌ Failed to save signal!")
-                
+                st.success(f"✅ Test signal added! Total: {len(st.session_state.active_signals)}")
+                st.balloons()
                 time.sleep(1)
                 st.rerun()
             
             if st.button("🗑️ CLEAR ALL SIGNALS", use_container_width=True):
                 st.session_state.active_signals = []
                 st.session_state.closed_signals = []
-                save_signals()
                 st.success("✅ All signals cleared!")
                 st.rerun()
         
@@ -1171,22 +1403,8 @@ with tab7:
         st.write("**Raw Session State:**")
         st.json({
             'active_count': len(st.session_state.active_signals),
-            'active_signals': st.session_state.active_signals,
             'closed_count': len(st.session_state.closed_signals)
         })
-        
-        st.markdown("---")
-        st.write("**💾 Persistence File Status:**")
-        if os.path.exists(SIGNALS_FILE):
-            st.success(f"✅ File exists: {SIGNALS_FILE}")
-            file_size = os.path.getsize(SIGNALS_FILE)
-            st.info(f"File size: {file_size} bytes")
-            if st.button("📖 READ FILE CONTENT"):
-                with open(SIGNALS_FILE, 'r') as f:
-                    content = json.load(f)
-                    st.json(content)
-        else:
-            st.warning("⚠️ No persistence file found yet")
     
     if st.button("🔄 REFRESH", use_container_width=True):
         update_signal_status()
@@ -1203,56 +1421,109 @@ with tab7:
                 if current > 0:
                     pnl = current - sig['entry_price']
                     pnl_pct = ((current / sig['entry_price']) - 1) * 100
-                    col1, col2, col3, col4 = st.columns([2, 2, 3, 3])
-                    with col1:
-                        st.markdown(f"### {sig['tier']}\n**{sig['symbol']}**")
-                    with col2:
-                        st.metric("Entry", f"${sig['entry_price']:.2f}")
-                        st.metric("Current", f"${current:.2f}")
-                    with col3:
-                        st.metric("Stop", f"${sig['stop']:.2f}")
-                        st.metric("TP1", f"${sig['tp1']:.2f}", "✅" if current >= sig['tp1'] else "")
-                    with col4:
-                        st.metric("Unrealized P&L", f"${pnl:+.2f}", f"{pnl_pct:+.1f}%")
-                        if st.button("❌ Close", key=f"close_{idx}"):
-                            sig['exit_price'] = current
-                            sig['exit_reason'] = 'MANUAL'
-                            sig['exit_date'] = datetime.now().strftime('%Y-%m-%d %H:%M')
-                            sig['pnl'] = pnl
-                            sig['pnl_pct'] = pnl_pct
-                            sig['status'] = 'CLOSED'
-                            st.session_state.closed_signals.append(sig)
-                            st.session_state.active_signals.pop(idx)
-                            save_signals()  # SAUVEGARDE
-                            st.rerun()
-                    st.markdown("---")
+                    
+                    with st.container():
+                        col1, col2, col3, col4 = st.columns([2, 2, 3, 3])
+                        
+                        with col1:
+                            st.markdown(f"### {sig['tier']}\n**{sig['symbol']}**")
+                            st.caption(f"Entry: {sig['entry_date']}")
+                        
+                        with col2:
+                            st.metric("Entry", f"${sig['entry_price']:.2f}")
+                            st.metric("Current", f"${current:.2f}")
+                        
+                        with col3:
+                            st.metric("Stop", f"${sig['stop']:.2f}")
+                            tp1_hit = "✅" if current >= sig['tp1'] else ""
+                            st.metric("TP1", f"${sig['tp1']:.2f}", tp1_hit)
+                            st.caption(f"TP2: ${sig['tp2']:.2f} | TP3: ${sig['tp3']:.2f}")
+                        
+                        with col4:
+                            st.metric("Unrealized P&L", f"${pnl:+.2f}", f"{pnl_pct:+.1f}%")
+                            progress = min(max((current - sig['entry_price']) / (sig['tp3'] - sig['entry_price']), 0), 1)
+                            st.progress(progress)
+                            if st.button("❌ Close", key
+                            if st.button("❌ Close", key=f"close_{idx}"):
+                                sig['exit_price'] = current
+                                sig['exit_reason'] = 'MANUAL CLOSE'
+                                sig['exit_date'] = datetime.now().strftime('%Y-%m-%d %H:%M')
+                                sig['pnl'] = pnl
+                                sig['pnl_pct'] = pnl_pct
+                                sig['status'] = 'CLOSED'
+                                st.session_state.closed_signals.append(sig)
+                                st.session_state.active_signals.pop(idx)
+                                st.success(f"✅ Closed {sig['symbol']}")
+                                st.rerun()
+                        
+                        st.markdown("---")
         else:
-            st.info("No active signals")
+            st.info("📊 No active signals. Start scanning to track opportunities!")
     
     with tab_closed:
         if len(st.session_state.closed_signals) > 0:
             closed_df = pd.DataFrame(st.session_state.closed_signals)
-            total_pnl = closed_df['pnl'].sum()
+            
+            # STATISTICS
             wins = len(closed_df[closed_df['pnl'] > 0])
-            win_rate = (wins / len(closed_df)) * 100
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Total", len(closed_df))
-            col2.metric("Win Rate", f"{win_rate:.1f}%")
-            col3.metric("Total P&L", f"${total_pnl:+,.2f}")
-            display_df = pd.DataFrame({
-                'Symbol': closed_df['symbol'],
-                'Tier': closed_df['tier'],
-                'Entry': closed_df['entry_price'].apply(lambda x: f"${x:.2f}"),
-                'Exit': closed_df['exit_price'].apply(lambda x: f"${x:.2f}"),
-                'Exit Reason': closed_df['exit_reason'],
-                'P&L': closed_df['pnl'].apply(lambda x: f"${x:+.2f}"),
-                'P&L%': closed_df['pnl_pct'].apply(lambda x: f"{x:+.2f}%"),
-                'Result': closed_df['pnl'].apply(lambda x: '🟢 WIN' if x > 0 else '🔴 LOSS')
-            })
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            losses = len(closed_df[closed_df['pnl'] <= 0])
+            total = len(closed_df)
+            win_rate = (wins / total * 100) if total > 0 else 0
+            total_pnl = closed_df['pnl'].sum()
+            
+            col1, col2, col3, col4, col5 = st.columns(5)
+            col1.metric("Total Trades", total)
+            col2.metric("Wins", wins)
+            col3.metric("Losses", losses)
+            col4.metric("Win Rate", f"{win_rate:.1f}%")
+            col5.metric("Total P&L", f"${total_pnl:+,.2f}")
+            
+            st.markdown("---")
+            
+            # TRADE HISTORY
+            for sig in reversed(st.session_state.closed_signals):
+                with st.container():
+                    col1, col2, col3, col4 = st.columns([2, 2, 3, 3])
+                    
+                    with col1:
+                        st.markdown(f"### {sig['tier']}\n**{sig['symbol']}**")
+                        st.caption(f"Entry: {sig['entry_date']}")
+                        st.caption(f"Exit: {sig['exit_date']}")
+                    
+                    with col2:
+                        st.metric("Entry", f"${sig['entry_price']:.2f}")
+                        st.metric("Exit", f"${sig['exit_price']:.2f}")
+                    
+                    with col3:
+                        st.write(f"**Exit Reason:** {sig['exit_reason']}")
+                        st.caption(f"Stop: ${sig['stop']:.2f}")
+                        st.caption(f"TP1: ${sig['tp1']:.2f} | TP2: ${sig['tp2']:.2f} | TP3: ${sig['tp3']:.2f}")
+                    
+                    with col4:
+                        color = "normal" if sig['pnl'] > 0 else "inverse"
+                        st.metric("Realized P&L", f"${sig['pnl']:+.2f}", f"{sig['pnl_pct']:+.1f}%", delta_color=color)
+                        result = "🟢 WIN" if sig['pnl'] > 0 else "🔴 LOSS"
+                        st.write(f"**Result:** {result}")
+                    
+                    st.markdown("---")
+            
+            st.markdown("---")
+            
+            # EXPORT
+            if st.button("💾 EXPORT CLOSED TRADES", use_container_width=True):
+                csv = closed_df.to_csv(index=False)
+                st.download_button("Download CSV", csv, "closed_trades.csv", "text/csv", use_container_width=True)
+        
         else:
-            st.info("No closed trades")
+            st.info("📊 No closed trades yet. Tracked signals will appear here when closed.")
 
+# ==================== FOOTER ====================
 st.markdown("---")
-st.caption("🥓 Bacon Trader Pro v6.3 FINAL | WE BACON! | 💾 WITH PERSISTENCE")
-st.caption(f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S EST')}")
+st.markdown("""
+<div style='text-align: center; color: #ff8c00; padding: 20px;'>
+    <h3>🥓 BACON TRADER PRO v7.0 ULTIMATE 🥓</h3>
+    <p>⚡ Quantum AI Engine | 🧠 Smart Money Concepts | ⭐ 80% Win Rate Setups</p>
+    <p>📊 Signal Tracker | 🧪 Backtesting | 📈 Advanced Charting | 💎 Premium Signals</p>
+    <p><strong>Developed with 🥓 by Bacon Team</strong></p>
+</div>
+""", unsafe_allow_html=True)
