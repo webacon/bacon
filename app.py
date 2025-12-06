@@ -1443,7 +1443,6 @@ with tab7:
                             st.metric("Unrealized P&L", f"${pnl:+.2f}", f"{pnl_pct:+.1f}%")
                             progress = min(max((current - sig['entry_price']) / (sig['tp3'] - sig['entry_price']), 0), 1)
                             st.progress(progress)
-                            if st.button("❌ Close", key
                             if st.button("❌ Close", key=f"close_{idx}"):
                                 sig['exit_price'] = current
                                 sig['exit_reason'] = 'MANUAL CLOSE'
