@@ -93,7 +93,7 @@ if st.button("🔍 Start Trading", type="primary", use_container_width=True):
     st.success("🎉 Trading dashboard coming soon!")
 
 st.info("🛡️ Protected by Cloudflare | ⚡ Powered by Vercel | 🥓 Made with Bacon")
-"@ | Out-File -FilePath app.py -Encoding UTF8
+
 
 Write-Host "✅ app.py created!" -ForegroundColor Green
 =======
