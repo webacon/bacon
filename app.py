@@ -1,5 +1,3 @@
-HEAD
-# Si app.py n'existe pas, copy-paste tout ça:
 
 @"
 import streamlit as st
@@ -1629,3 +1627,4 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 origin/main
+"@ | Out-File -FilePath app.py -Encoding UTF8
