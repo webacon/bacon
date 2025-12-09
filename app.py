@@ -1626,4 +1626,3 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 origin/main
-"@ | Out-File -FilePath app.py -Encoding UTF8
