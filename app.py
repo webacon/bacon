@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+HEAD
 # Si app.py n'existe pas, copy-paste tout ça:
 
 @"
@@ -1628,4 +1628,4 @@ st.markdown("""
     <p><strong>Developed with 🥓 by Bacon Team</strong></p>
 </div>
 """, unsafe_allow_html=True)
->>>>>>> origin/main
+origin/main
